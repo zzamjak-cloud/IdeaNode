@@ -2,12 +2,22 @@ import "./App.css";
 import { useEffect } from "react";
 import { CategoryGrid } from "./features/categories/CategoryGrid";
 import { useAppStore } from "./store/appStore";
+import { listen } from "@tauri-apps/api/event";
 
 function App() {
   const { loading, error, categories, settings, refresh } = useAppStore();
 
   useEffect(() => {
     refresh();
+    let unlisten: (() => void) | null = null;
+    listen("ideanode:data_changed", async () => {
+      await refresh();
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => {
+      unlisten?.();
+    };
   }, [refresh]);
 
   useEffect(() => {

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Palette, Save, X } from "lucide-react";
+import { ArrowLeftFromLine, Archive, Palette } from "lucide-react";
 import { Modal } from "../../components/Modal";
 import { ColorPicker } from "../../components/ColorPicker";
 import { EmojiPicker } from "../../components/EmojiPicker";
 import { AnchoredPopover } from "../../components/AnchoredPopover";
 import type { Category } from "../../types";
+import { useAppStore } from "../../store/appStore";
 
 type Props = {
   open: boolean;
@@ -14,6 +15,7 @@ type Props = {
 };
 
 export function CategorySettingsModal({ open, category, onClose, onSave }: Props) {
+  const { setCategoryArchived } = useAppStore();
   const initial = useMemo(
     () => ({
       emoji: category?.emoji ?? "",
@@ -26,11 +28,13 @@ export function CategorySettingsModal({ open, category, onClose, onSave }: Props
   const [emoji, setEmoji] = useState(initial.emoji);
   const [title, setTitle] = useState(initial.title);
   const [color, setColor] = useState(initial.color);
-  const [saving, setSaving] = useState(false);
   const [colorOpen, setColorOpen] = useState(false);
   const colorWrapRef = useRef<HTMLDivElement | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const emojiBtnRef = useRef<HTMLButtonElement | null>(null);
+  const [confirmArchive, setConfirmArchive] = useState<null | { nextArchived: boolean }>(null);
+  const debounceRef = useRef<number | null>(null);
+  const lastSavedRef = useRef<null | { emoji: string; title: string; color: string }>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -39,6 +43,9 @@ export function CategorySettingsModal({ open, category, onClose, onSave }: Props
     setColor(initial.color);
     setColorOpen(false);
     setEmojiOpen(false);
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    debounceRef.current = null;
+    lastSavedRef.current = null;
   }, [open, initial.emoji, initial.title, initial.color]);
 
   useEffect(() => {
@@ -66,25 +73,82 @@ export function CategorySettingsModal({ open, category, onClose, onSave }: Props
 
   const canSubmit = title.trim().length > 0;
 
-  const doSave = async () => {
+  const flushSave = async () => {
+    if (!open) return;
     if (!category) return;
-    setSaving(true);
+    if (!canSubmit) return;
+    const snap = { title: title.trim(), color, emoji };
+    const last = lastSavedRef.current;
+    if (last && last.title === snap.title && last.color === snap.color && last.emoji === snap.emoji) return;
     try {
-      await onSave({ title: title.trim(), color, emoji });
-      onClose();
-    } finally {
-      setSaving(false);
+      await onSave(snap);
+      lastSavedRef.current = snap;
+    } catch {
+      // auto-save 실패는 조용히 무시(사용자 흐름 방해 방지)
     }
+  };
+
+  // 자동 저장(디바운스)
+  useEffect(() => {
+    if (!open) return;
+    if (!category) return;
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    debounceRef.current = window.setTimeout(async () => {
+      await flushSave();
+    }, 600);
+    return () => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, category?.id, emoji, title, color]);
+
+  const requestClose = () => {
+    // 닫기 전에 마지막 1회 저장 시도(가능한 경우)
+    void flushSave();
+    onClose();
   };
 
   return (
     <>
       <Modal
+        open={Boolean(confirmArchive) && open}
+        title={confirmArchive?.nextArchived ? "보관" : "복원"}
+        onClose={() => setConfirmArchive(null)}
+        zIndex={1000}
+        footer={
+          <div className="modalFooterRow">
+            <button className="btn" onClick={() => setConfirmArchive(null)}>
+              취소
+            </button>
+            <button
+              className="btn primary"
+              onClick={async () => {
+                if (!category || !confirmArchive) return;
+                try {
+                  await setCategoryArchived({ id: category.id, archived: confirmArchive.nextArchived });
+                  setConfirmArchive(null);
+                  onClose();
+                } finally {
+                  setConfirmArchive(null);
+                }
+              }}
+            >
+              확인
+            </button>
+          </div>
+        }
+      >
+        <div style={{ padding: 8, color: "rgba(255,255,255,0.8)" }}>
+          {confirmArchive?.nextArchived ? "카테고리를 보관함으로 이동하시겠습니까?" : "카테고리를 복원하시겠습니까?"}
+        </div>
+      </Modal>
+
+      <Modal
       open={open}
       placement="top"
       hideBody
       hideDefaultClose
-      onClose={onClose}
+      onClose={requestClose}
       headerContent={
         <div className="memoEditorHeader">
           {/* 이모지 버튼을 제목 왼쪽으로 이동 */}
@@ -126,18 +190,17 @@ export function CategorySettingsModal({ open, category, onClose, onSave }: Props
               ) : null}
             </div>
 
-            <button
-              className="iconOnlyBtn"
-              onClick={doSave}
-              disabled={saving || !category || !canSubmit}
-              aria-label="저장"
-              title="저장"
-            >
-              <Save size={18} />
-            </button>
-            <button className="iconOnlyBtn" onClick={onClose} aria-label="닫기" title="닫기">
-              <X size={18} />
-            </button>
+            {category ? (
+              <button
+                className="iconOnlyBtn"
+                type="button"
+                onClick={() => setConfirmArchive({ nextArchived: !category.archived })}
+                aria-label={category.archived ? "카테고리 꺼내기" : "카테고리 보관"}
+                title={category.archived ? "꺼내기" : "보관"}
+              >
+                {category.archived ? <ArrowLeftFromLine size={18} /> : <Archive size={18} />}
+              </button>
+            ) : null}
           </div>
         </div>
       }

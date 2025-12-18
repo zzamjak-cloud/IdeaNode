@@ -2,7 +2,7 @@ use crate::db::{get_memo_category_and_position, next_position, now_timestamp_ms,
 use crate::models::{
     AppSettings, Category, CategoryWithMemos, CreateCategoryInput, CreateMemoInput, Memo,
     MoveMemoInput, ReorderCategoriesInput, ReorderMemosInput, SetBackgroundColorInput,
-    SetCategoryCollapsedInput, UpdateCategoryInput, UpdateMemoInput,
+    SetCategoryArchivedInput, SetCategoryCollapsedInput, UpdateCategoryInput, UpdateMemoInput,
 };
 use rusqlite::{params, OptionalExtension};
 use uuid::Uuid;
@@ -14,9 +14,11 @@ fn row_to_category(row: &rusqlite::Row<'_>) -> rusqlite::Result<Category> {
         title: row.get(2)?,
         color: row.get(3)?,
         position: row.get(4)?,
-        is_collapsed: row.get::<_, i64>(5)? != 0,
-        created_at: row.get(6)?,
-        updated_at: row.get(7)?,
+        archived: row.get::<_, i64>(5)? != 0,
+        is_todo: row.get::<_, i64>(6)? != 0,
+        is_collapsed: row.get::<_, i64>(7)? != 0,
+        created_at: row.get(8)?,
+        updated_at: row.get(9)?,
     })
 }
 
@@ -29,9 +31,10 @@ fn row_to_memo(row: &rusqlite::Row<'_>) -> rusqlite::Result<Memo> {
         color: row.get(4)?,
         date_ymd: row.get(5)?,
         content_md: row.get(6)?,
-        position: row.get(7)?,
-        created_at: row.get(8)?,
-        updated_at: row.get(9)?,
+        todo_done: row.get::<_, i64>(7)? != 0,
+        position: row.get(8)?,
+        created_at: row.get(9)?,
+        updated_at: row.get(10)?,
     })
 }
 
@@ -44,7 +47,7 @@ pub fn list_categories_with_memos(state: tauri::State<'_, DbState>) -> Result<Ve
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, emoji, title, color, position, is_collapsed, created_at, updated_at
+            "SELECT id, emoji, title, color, position, archived, is_todo, is_collapsed, created_at, updated_at
              FROM categories
              ORDER BY position ASC",
         )
@@ -60,7 +63,7 @@ pub fn list_categories_with_memos(state: tauri::State<'_, DbState>) -> Result<Ve
 
         let mut memo_stmt = conn
             .prepare(
-                "SELECT id, category_id, emoji, title, color, date_ymd, content_md, position, created_at, updated_at
+                "SELECT id, category_id, emoji, title, color, date_ymd, content_md, todo_done, position, created_at, updated_at
                  FROM memos
                  WHERE category_id = ?1
                  ORDER BY position ASC",
@@ -101,15 +104,24 @@ pub fn create_category(
     let position = next_position(&tx, "categories", None)?;
 
     tx.execute(
-        "INSERT INTO categories (id, emoji, title, color, position, is_collapsed, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?7)",
-        params![&id, input.emoji.as_deref().unwrap_or(""), &input.title, &input.color, position, ts, ts],
+        "INSERT INTO categories (id, emoji, title, color, position, archived, is_todo, is_collapsed, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, 0, ?7, ?8)",
+        params![
+            &id,
+            input.emoji.as_deref().unwrap_or(""),
+            &input.title,
+            &input.color,
+            position,
+            if input.is_todo { 1 } else { 0 },
+            ts,
+            ts
+        ],
     )
     .map_err(|e| format!("insert category error: {e}"))?;
 
     let category = tx
         .query_row(
-            "SELECT id, emoji, title, color, position, is_collapsed, created_at, updated_at
+            "SELECT id, emoji, title, color, position, archived, is_todo, is_collapsed, created_at, updated_at
              FROM categories WHERE id = ?1",
             params![&id],
             row_to_category,
@@ -138,7 +150,34 @@ pub fn update_category(
     .map_err(|e| format!("update category error: {e}"))?;
 
     conn.query_row(
-        "SELECT id, emoji, title, color, position, is_collapsed, created_at, updated_at
+        "SELECT id, emoji, title, color, position, archived, is_todo, is_collapsed, created_at, updated_at
+         FROM categories WHERE id = ?1",
+        params![&input.id],
+        row_to_category,
+    )
+    .map_err(|e| format!("fetch category error: {e}"))
+}
+
+#[tauri::command]
+pub fn set_category_archived(
+    state: tauri::State<'_, DbState>,
+    input: SetCategoryArchivedInput,
+) -> Result<Category, String> {
+    let conn = state
+        .conn
+        .lock()
+        .map_err(|_| "db mutex poisoned".to_string())?;
+    let ts = now_timestamp_ms();
+    let archived_int: i64 = if input.archived { 1 } else { 0 };
+
+    conn.execute(
+        "UPDATE categories SET archived = ?1, updated_at = ?2 WHERE id = ?3",
+        params![archived_int, ts, &input.id],
+    )
+    .map_err(|e| format!("set archived error: {e}"))?;
+
+    conn.query_row(
+        "SELECT id, emoji, title, color, position, archived, is_todo, is_collapsed, created_at, updated_at
          FROM categories WHERE id = ?1",
         params![&input.id],
         row_to_category,
@@ -165,7 +204,7 @@ pub fn set_category_collapsed(
     .map_err(|e| format!("set collapsed error: {e}"))?;
 
     conn.query_row(
-        "SELECT id, emoji, title, color, position, is_collapsed, created_at, updated_at
+        "SELECT id, emoji, title, color, position, archived, is_todo, is_collapsed, created_at, updated_at
          FROM categories WHERE id = ?1",
         params![&input.id],
         row_to_category,
@@ -296,11 +335,11 @@ pub fn create_memo(state: tauri::State<'_, DbState>, input: CreateMemoInput) -> 
     let position = next_position(&tx, "memos", Some(("category_id", &input.category_id)))?;
 
     tx.execute(
-        "INSERT INTO memos (id, category_id, emoji, title, color, date_ymd, content_md, position, created_at, updated_at)
+        "INSERT INTO memos (id, category_id, emoji, title, color, date_ymd, content_md, todo_done, position, created_at, updated_at)
          VALUES (
-           ?1, ?2, ?3, ?4, ?5,
+          ?1, ?2, ?3, ?4, ?5,
            COALESCE(NULLIF(?6, ''), strftime('%Y-%m-%d', ?9/1000, 'unixepoch', 'localtime')),
-           ?7, ?8, ?9, ?10
+          ?7, 0, ?8, ?9, ?10
          )",
         params![
             &id,
@@ -319,7 +358,7 @@ pub fn create_memo(state: tauri::State<'_, DbState>, input: CreateMemoInput) -> 
 
     let memo = tx
         .query_row(
-            "SELECT id, category_id, emoji, title, color, date_ymd, content_md, position, created_at, updated_at
+            "SELECT id, category_id, emoji, title, color, date_ymd, content_md, todo_done, position, created_at, updated_at
              FROM memos WHERE id = ?1",
             params![&id],
             row_to_memo,
@@ -340,14 +379,15 @@ pub fn update_memo(state: tauri::State<'_, DbState>, input: UpdateMemoInput) -> 
 
     conn.execute(
         "UPDATE memos
-         SET emoji = ?1, title = ?2, color = ?3, date_ymd = ?4, content_md = ?5, updated_at = ?6
-         WHERE id = ?7",
+         SET emoji = ?1, title = ?2, color = ?3, date_ymd = ?4, content_md = ?5, todo_done = ?6, updated_at = ?7
+         WHERE id = ?8",
         params![
             &input.emoji,
             &input.title,
             &input.color,
             &input.date_ymd,
             &input.content_md,
+            if input.todo_done { 1 } else { 0 },
             ts,
             &input.id
         ],
@@ -355,7 +395,7 @@ pub fn update_memo(state: tauri::State<'_, DbState>, input: UpdateMemoInput) -> 
     .map_err(|e| format!("update memo error: {e}"))?;
 
     conn.query_row(
-        "SELECT id, category_id, emoji, title, color, date_ymd, content_md, position, created_at, updated_at
+        "SELECT id, category_id, emoji, title, color, date_ymd, content_md, todo_done, position, created_at, updated_at
          FROM memos WHERE id = ?1",
         params![&input.id],
         row_to_memo,

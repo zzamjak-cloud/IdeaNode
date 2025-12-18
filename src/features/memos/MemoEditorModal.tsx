@@ -74,6 +74,7 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
     color: string;
     date_ymd: string;
     content_md: string;
+    todo_done: boolean;
   } | null>(null);
 
   const editor = useEditor({
@@ -134,6 +135,7 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
           color: created.color,
           date_ymd: created.date_ymd,
           content_md: created.content_md,
+          todo_done: !!created.todo_done,
         };
       } catch {
         // v1: 초안 생성 실패 시에도 사용자는 계속 작성 가능(단, 닫기 전에 수동 저장 필요)
@@ -182,6 +184,7 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
       color,
       date_ymd: dateYmd,
       content_md: editor?.getHTML() ?? content ?? "",
+      todo_done: mode?.kind === "edit" ? !!mode.memo.todo_done : false,
     };
   };
 
@@ -196,7 +199,8 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
       last.title === snap.title &&
       last.color === snap.color &&
       last.date_ymd === snap.date_ymd &&
-      last.content_md === snap.content_md
+      last.content_md === snap.content_md &&
+      last.todo_done === snap.todo_done
     ) {
       return;
     }
@@ -208,6 +212,7 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
         color: snap.color,
         date_ymd: snap.date_ymd,
         content_md: snap.content_md,
+        todo_done: snap.todo_done,
       });
       lastSavedRef.current = snap;
     } catch {

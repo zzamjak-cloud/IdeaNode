@@ -55,6 +55,8 @@ fn migrate(conn: &Connection) -> Result<(), String> {
                       title TEXT NOT NULL,
                       color TEXT NOT NULL,
                       position INTEGER NOT NULL,
+                      archived INTEGER NOT NULL DEFAULT 0,
+                      is_todo INTEGER NOT NULL DEFAULT 0,
                       is_collapsed INTEGER NOT NULL DEFAULT 0,
                       created_at INTEGER NOT NULL,
                       updated_at INTEGER NOT NULL
@@ -68,6 +70,7 @@ fn migrate(conn: &Connection) -> Result<(), String> {
                       color TEXT NOT NULL,
                       date_ymd TEXT NOT NULL,
                       content_md TEXT NOT NULL,
+                      todo_done INTEGER NOT NULL DEFAULT 0,
                       position INTEGER NOT NULL,
                       created_at INTEGER NOT NULL,
                       updated_at INTEGER NOT NULL,
@@ -82,12 +85,12 @@ fn migrate(conn: &Connection) -> Result<(), String> {
                     CREATE INDEX IF NOT EXISTS idx_categories_position ON categories(position);
                     CREATE INDEX IF NOT EXISTS idx_memos_category_position ON memos(category_id, position);
 
-                    PRAGMA user_version = 4;
+                    PRAGMA user_version = 5;
                     COMMIT;
                     "#,
                 )
-                .map_err(|e| format!("migration v0->v4 error: {e}"))?;
-                current_version = 4;
+                .map_err(|e| format!("migration v0->v5 error: {e}"))?;
+                current_version = 5;
             }
             1 => {
                 conn.execute_batch(
@@ -132,6 +135,20 @@ fn migrate(conn: &Connection) -> Result<(), String> {
                 .map_err(|e| format!("migration v3->v4 error: {e}"))?;
                 current_version = 4;
             }
+            4 => {
+                conn.execute_batch(
+                    r#"
+                    BEGIN;
+                    ALTER TABLE categories ADD COLUMN archived INTEGER NOT NULL DEFAULT 0;
+                    ALTER TABLE categories ADD COLUMN is_todo INTEGER NOT NULL DEFAULT 0;
+                    ALTER TABLE memos ADD COLUMN todo_done INTEGER NOT NULL DEFAULT 0;
+                    PRAGMA user_version = 5;
+                    COMMIT;
+                    "#,
+                )
+                .map_err(|e| format!("migration v4->v5 error: {e}"))?;
+                current_version = 5;
+            }
             _ => break,
         }
     }
@@ -157,6 +174,7 @@ pub fn next_position(conn: &Connection, table: &str, where_clause: Option<(&str,
     Ok(pos)
 }
 
+#[allow(dead_code)]
 pub fn touch_updated_at(conn: &Connection, table: &str, id: &str) -> Result<(), String> {
     let ts = now_ms();
     let sql = format!("UPDATE {table} SET updated_at = ?1 WHERE id = ?2");

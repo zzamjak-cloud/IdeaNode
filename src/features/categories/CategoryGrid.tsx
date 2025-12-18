@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Palette, Plus, X } from "lucide-react";
+import { Archive, Palette, Plus, X } from "lucide-react";
 import { useAppStore } from "../../store/appStore";
 import type { Category, Memo } from "../../types";
 import { ColorPicker } from "../../components/ColorPicker";
@@ -16,8 +16,7 @@ import { SortableContext, arrayMove, rectSortingStrategy } from "@dnd-kit/sortab
 import { SortableCategoryCard } from "./SortableCategoryCard";
 import { CategorySettingsModal } from "./CategorySettingsModal";
 import { CreateCategoryModal } from "./CreateCategoryModal";
-import { MemoEditorModal } from "../memos/MemoEditorModal";
-import { api } from "../../lib/tauri";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 
 export function CategoryGrid() {
   const {
@@ -26,7 +25,11 @@ export function CategoryGrid() {
     updateCategory,
     setCategoryCollapsed,
     deleteCategory,
-    refresh,
+    deleteMemo,
+    moveMemo,
+    reorderCategories,
+    reorderMemos,
+    updateMemo,
     settings,
     setBackgroundColorLocal,
     saveBackgroundColor,
@@ -35,7 +38,6 @@ export function CategoryGrid() {
   const [createOpen, setCreateOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsCategory, setSettingsCategory] = useState<Category | null>(null);
-  const [editorOpen, setEditorOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [bgOpen, setBgOpen] = useState(false);
   const bgWrapRef = useRef<HTMLDivElement | null>(null);
@@ -64,17 +66,45 @@ export function CategoryGrid() {
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [bgOpen]);
-  const [editorMode, setEditorMode] = useState<
-    | { kind: "create"; categoryId: string; defaultColor: string }
-    | { kind: "edit"; memo: Memo }
-    | null
-  >(null);
+  const openMemoWindow = async (url: string, label: string, title: string) => {
+    try {
+      const existing = await WebviewWindow.getByLabel(label);
+      if (existing) {
+        await existing.setFocus();
+        return;
+      }
+      new WebviewWindow(label, {
+        title,
+        width: 900,
+        height: 720,
+        resizable: true,
+        url,
+      });
+    } catch (e) {
+      console.error("memo window open error", e);
+      window.alert(`메모 창을 열 수 없습니다.\n${String(e)}`);
+    }
+  };
+
+  const openMemoEdit = async (memo: Memo) => {
+    await openMemoWindow(`/?memo=${encodeURIComponent(memo.id)}`, `memo-${memo.id}`, memo.title || "메모");
+  };
+
+  const openMemoCreate = async (categoryId: string, defColor: string) => {
+    const label = `memo-new-${categoryId}-${Date.now()}`;
+    await openMemoWindow(
+      `/?create_category_id=${encodeURIComponent(categoryId)}&default_color=${encodeURIComponent(defColor)}`,
+      label,
+      "새 메모",
+    );
+  };
 
   const filtered = useMemo(() => {
+    const visible = categories.filter((c) => !c.category.archived);
     const q = query.trim().toLowerCase();
-    if (!q) return categories;
+    if (!q) return visible;
 
-    return categories
+    return visible
       .map((item) => {
         const catMatch = item.category.title.toLowerCase().includes(q);
         const memos = item.memos.filter((m) => m.title.toLowerCase().includes(q));
@@ -100,11 +130,31 @@ export function CategoryGrid() {
 
   const [activeId, setActiveId] = useState<string | null>(null);
 
+  const openArchiveWindow = async () => {
+    try {
+      const existing = await WebviewWindow.getByLabel("archive");
+      if (existing) {
+        await existing.setFocus();
+        return;
+      }
+      // SPA이므로 query로 분기
+      new WebviewWindow("archive", {
+        title: "보관함",
+        width: 420,
+        height: 720,
+        resizable: true,
+        url: "/?archive=1",
+      });
+    } catch (e) {
+      // 권한(capability) 문제 등으로 창 생성이 막히면 사용자에게 바로 보이게
+      console.error("archive window open error", e);
+      window.alert(`보관함 창을 열 수 없습니다.\n${String(e)}`);
+    }
+  };
+
   return (
     <div className="page">
       <div className="topBar">
-        <div className="appTitle">IdeaNode</div>
-        <div className="spacer" />
         <div className="searchWrap">
           <input
             className="searchInput"
@@ -125,34 +175,45 @@ export function CategoryGrid() {
             </button>
           ) : null}
         </div>
-        <button className="iconOnlyBtn addBtn" onClick={() => setCreateOpen(true)} aria-label="카테고리 추가">
-          <Plus size={18} />
-        </button>
-        <div className="colorMenuWrap" ref={bgWrapRef}>
+        <div className="topBarRight">
           <button
-            className="iconOnlyBtn"
+            className="iconOnlyBtn archiveBtn"
             type="button"
-            onClick={() => setBgOpen((v) => !v)}
-            aria-label="배경 컬러 설정"
-            title="배경 컬러"
+            onClick={openArchiveWindow}
+            aria-label="보관함 열기"
+            title="보관함"
           >
-            <Palette size={18} />
+            <Archive size={18} />
           </button>
-          {bgOpen ? (
-            <div className="popover">
-              <ColorPicker
-                value={settings.background_color?.trim().length ? settings.background_color : "#0b1020"}
-                onChange={(next) => {
-                  // 미리보기는 즉시(로컬 상태만), 저장은 0.5s 디바운스
-                  setBackgroundColorLocal(next);
-                  if (bgDebounceRef.current) window.clearTimeout(bgDebounceRef.current);
-                  bgDebounceRef.current = window.setTimeout(() => {
-                    saveBackgroundColor({ background_color: next });
-                  }, 500);
-                }}
-              />
-            </div>
-          ) : null}
+          <button className="iconOnlyBtn addBtn" onClick={() => setCreateOpen(true)} aria-label="카테고리 추가">
+            <Plus size={18} />
+          </button>
+          <div className="colorMenuWrap" ref={bgWrapRef}>
+            <button
+              className="iconOnlyBtn"
+              type="button"
+              onClick={() => setBgOpen((v) => !v)}
+              aria-label="배경 컬러 설정"
+              title="배경 컬러"
+            >
+              <Palette size={18} />
+            </button>
+            {bgOpen ? (
+              <div className="popover">
+                <ColorPicker
+                  value={settings.background_color?.trim().length ? settings.background_color : "#0b1020"}
+                  onChange={(next) => {
+                    // 미리보기는 즉시(로컬 상태만), 저장은 0.5s 디바운스
+                    setBackgroundColorLocal(next);
+                    if (bgDebounceRef.current) window.clearTimeout(bgDebounceRef.current);
+                    bgDebounceRef.current = window.setTimeout(() => {
+                      saveBackgroundColor({ background_color: next });
+                    }, 500);
+                  }}
+                />
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -185,10 +246,7 @@ export function CategoryGrid() {
             const newIndex = categoryIds.indexOf(overId);
             if (oldIndex !== -1 && newIndex !== -1) {
               const next = arrayMove(categoryIds, oldIndex, newIndex);
-              await api.reorderCategories({
-                ordered_ids: next.map((x) => x.replace("cat:", "")),
-              });
-              await refresh();
+              await reorderCategories({ ordered_ids: next.map((x) => x.replace("cat:", "")) });
             }
             setActiveId(null);
             return;
@@ -211,19 +269,17 @@ export function CategoryGrid() {
               const newIndex = memoIds.indexOf(overId);
               if (oldIndex !== -1 && newIndex !== -1) {
                 const next = arrayMove(memoIds, oldIndex, newIndex);
-                await api.reorderMemos({
+                await reorderMemos({
                   category_id: activeCat,
                   ordered_ids: next.map((x) => x.replace("memo:", "")),
                 });
-                await refresh();
               }
               setActiveId(null);
               return;
             }
             // 다른 카테고리의 메모 위로 드롭한 경우: 해당 카테고리로 이동(끝에 붙이기)
             if (activeCat && overCat && activeCat !== overCat) {
-              await api.moveMemo({ memo_id: activeId.replace("memo:", ""), to_category_id: overCat });
-              await refresh();
+              await moveMemo({ memo_id: activeId.replace("memo:", ""), to_category_id: overCat });
               setActiveId(null);
               return;
             }
@@ -240,8 +296,7 @@ export function CategoryGrid() {
             const fromCategoryId = (active.data.current as { categoryId?: string } | undefined)?.categoryId;
             if (fromCategoryId && fromCategoryId === toCategoryId) return;
 
-            await api.moveMemo({ memo_id: memoId, to_category_id: toCategoryId });
-            await refresh();
+            await moveMemo({ memo_id: memoId, to_category_id: toCategoryId });
             setActiveId(null);
           }
 
@@ -274,12 +329,7 @@ export function CategoryGrid() {
                   })
                 }
                 onCreateMemo={() => {
-                  setEditorMode({
-                    kind: "create",
-                    categoryId: item.category.id,
-                defaultColor: "#ffffff",
-                  });
-                  setEditorOpen(true);
+                  openMemoCreate(item.category.id, "#ffffff");
                 }}
                 onOpenSettings={() => {
                   setSettingsCategory(item.category);
@@ -293,8 +343,18 @@ export function CategoryGrid() {
                   });
                 }}
                 onOpenMemo={(memo) => {
-                  setEditorMode({ kind: "edit", memo });
-                  setEditorOpen(true);
+                  openMemoEdit(memo);
+                }}
+                onToggleTodoDone={async (memo, next) => {
+                  await updateMemo({
+                    id: memo.id,
+                    emoji: memo.emoji,
+                    title: memo.title,
+                    color: memo.color,
+                    date_ymd: memo.date_ymd,
+                    content_md: memo.content_md,
+                    todo_done: next,
+                  });
                 }}
                 onDeleteMemo={async (memo) => {
                   setConfirm({ kind: "memo", id: memo.id, title: memo.title });
@@ -321,13 +381,6 @@ export function CategoryGrid() {
         }}
       />
 
-      <MemoEditorModal
-        open={editorOpen}
-        mode={editorMode}
-        onClose={() => setEditorOpen(false)}
-        onCreatedOrUpdated={refresh}
-      />
-
       <Modal
         open={Boolean(confirm)}
         title="삭제"
@@ -345,8 +398,7 @@ export function CategoryGrid() {
                   if (confirm.kind === "category") {
                     await deleteCategory(confirm.id);
                   } else {
-                    await api.deleteMemo(confirm.id);
-                    await refresh();
+                    await deleteMemo(confirm.id);
                   }
                 } finally {
                   setConfirm(null);

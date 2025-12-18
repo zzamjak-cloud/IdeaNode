@@ -9,6 +9,7 @@ import type {
   ReorderCategoriesInput,
   ReorderMemosInput,
   SetBackgroundColorInput,
+  SetCategoryArchivedInput,
   SetCategoryCollapsedInput,
   UpdateCategoryInput,
   UpdateMemoInput,
@@ -33,6 +34,10 @@ export const api = {
 
   updateCategory(input: UpdateCategoryInput): Promise<Category> {
     return invoke("update_category", { input });
+  },
+
+  setCategoryArchived(input: SetCategoryArchivedInput): Promise<Category> {
+    return invoke("set_category_archived", { input });
   },
 
   setCategoryCollapsed(input: SetCategoryCollapsedInput): Promise<Category> {

@@ -30,14 +30,17 @@
   - 앱 루트. 초기 `refresh()`로 DB 데이터/설정을 로드하고, 앱 배경 컬러(CSS var `--bg`)를 적용합니다.
 - `App.css`
   - 전역 스타일(모달, 그리드, hover-only 아이콘, DnD 시각 피드백, popover/portal 등)
+- `windows/*`
+  - `ArchiveWindow.tsx`: 보관함 전용 창(UI: 검색/리스트/확장형 메모 보기/복원)
+  - `MemoWindow.tsx`: 메모 편집 전용 창(TipTap + 자동 저장, ESC로 닫기)
 - `features/categories/*`
   - `CategoryGrid.tsx`: 상단바(검색/+ / 배경색 팔레트), 카테고리 렌더, DnD 컨텍스트, 삭제 confirm 모달 등
   - `CategoryCard.tsx`: 카테고리 카드 UI(제목/이모지 표시, 접기/삭제/추가 버튼, 메모 리스트)
-  - `CategorySettingsModal.tsx`: 카테고리 편집(제목/이모지/텍스트컬러) — 상단 배치 모달
+  - `CategorySettingsModal.tsx`: 카테고리 편집(제목/이모지/텍스트컬러) — 상단 배치 모달 + **자동 저장(디바운스)** + 보관/복원
   - `CreateCategoryModal.tsx`: 카테고리 생성(기본 컬러 프리셋 포함)
   - `SortableCategoryCard.tsx`: 카테고리 그리드 정렬 Sortable 래퍼
 - `features/memos/*`
-  - `MemoEditorModal.tsx`: 메모 편집(이모지/제목/날짜/텍스트 컬러/저장/닫기) + TipTap 에디터 + 자동 저장
+  - `MemoEditorModal.tsx`: (레거시/참고) 메모 편집 모달 구현(이제 기본 UX는 별도 창 `MemoWindow`)
   - `SortableMemoRow.tsx`: 카테고리 내 메모 Sortable 행(이모지/제목/삭제/날짜 표시)
 - `components/*`
   - `Modal.tsx`: 공통 모달(헤더 커스텀/상단 배치/바디 숨김 등)
@@ -72,9 +75,9 @@
 
 ### 주요 테이블(개념)
 - `categories`
-  - `emoji`, `title`, `color(텍스트 컬러)`, `position`, `is_collapsed`, timestamps
+  - `emoji`, `title`, `color(텍스트 컬러)`, `position`, `is_collapsed`, `archived`, `is_todo`, timestamps
 - `memos`
-  - `emoji`, `title`, `color(텍스트 컬러)`, `date_ymd`, `content_md(현재는 HTML 문자열 저장)`, `position`, timestamps
+  - `emoji`, `title`, `color(텍스트 컬러)`, `date_ymd`, `content_md(현재는 HTML 문자열 저장)`, `todo_done`, `position`, timestamps
 - `settings`
   - `background_color` 등 앱 전역 설정을 key-value로 저장
 
@@ -83,6 +86,7 @@
 - v2: memos에 `date_ymd` 추가
 - v3: categories에 `emoji` 추가 + settings 테이블 추가
 - v4: memos에 `emoji` 추가
+- v5: categories에 `archived`, `is_todo` 추가 + memos에 `todo_done` 추가
 
 ---
 
@@ -102,6 +106,9 @@
 - **자동 저장**:
   - 디바운스 저장(기본 1.2초) + 닫기 직전 flush 저장
   - create 모드에서도 초안 메모를 즉시 생성해 유실 방지
+- **멀티 윈도우**:
+  - 보관함/메모 편집은 별도 창으로 열어(좌우 배치 등) 작은 메인 창에서도 편집 UX가 유지되도록 함
+  - 창 간 동기화는 `ideanode:data_changed` 이벤트로 refresh
 
 ---
 
@@ -137,4 +144,19 @@
   - 상단 배경색 팔레트(앱 배경 컬러 커스텀/저장)
   - 이모지 팝업은 portal popover로 렌더링되어 창/모달에 의해 잘리지 않음
 
+### v0.2.0 (2025-12-19)
+- **보관함 기능(archived)**
+  - 보관함 버튼으로 보관함 창 오픈
+  - 보관함 창: 검색 + 카테고리 리스트 + 카테고리 클릭 시 메모 목록 확장(읽기 전용) + 우측 “꺼내기”로 복원(확인창)
+  - 카테고리 편집창에서 보관/복원(확인창)
+- **Todo list 카테고리**
+  - 카테고리 생성 시 `Todo list` 옵션(`is_todo`)
+  - Todo 카테고리의 메모 row: 체크박스 표시 + 완료 시 취소선/회색 + DB에 `todo_done` 저장
+- **메모 편집 UX 개선**
+  - 메모 편집은 기본적으로 **별도 창(`MemoWindow`)**에서 열림
+  - 자동 저장 기반으로 저장/닫기 버튼 제거, ESC로 닫기
+  - 메인/보관함/메모창 간 데이터 갱신은 `ideanode:data_changed` 이벤트로 동기화
+- **반응형 개선**
+  - 상단바에서 불필요한 텍스트 제거, 검색창이 가변 폭으로 줄어들며 버튼은 항상 표시
+  - 카테고리/메모 row에서 텍스트 영역을 최대 사용하도록 flex 구조 조정
 

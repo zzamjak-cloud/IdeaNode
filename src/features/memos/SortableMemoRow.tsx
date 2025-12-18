@@ -7,12 +7,14 @@ import { formatYmdShort } from "../../lib/date";
 
 type Props = {
   memo: Memo;
+  isTodo?: boolean;
+  onToggleTodo?: (next: boolean) => void;
   disabled?: boolean;
   onOpen: () => void;
   onDelete: () => void;
 };
 
-export function SortableMemoRow({ memo, disabled, onOpen, onDelete }: Props) {
+export function SortableMemoRow({ memo, isTodo, onToggleTodo, disabled, onOpen, onDelete }: Props) {
   const id = `memo:${memo.id}`;
   const { setNodeRef, setActivatorNodeRef, attributes, listeners, transform, transition, isDragging, isOver } =
     useSortable({
@@ -53,13 +55,27 @@ export function SortableMemoRow({ memo, disabled, onOpen, onDelete }: Props) {
         }}
         aria-label="메모 열기/드래그"
       >
-        {memo.emoji?.length ? <span className="memoEmoji">{memo.emoji}</span> : null}
-        <span className="memoTitle" style={{ color: memo.color }}>
+        {isTodo ? (
+          <input
+            className="todoCheckbox"
+            type="checkbox"
+            checked={!!memo.todo_done}
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => onToggleTodo?.(e.currentTarget.checked)}
+            aria-label="Todo 완료"
+          />
+        ) : memo.emoji?.length ? (
+          <span className="memoEmoji">{memo.emoji}</span>
+        ) : null}
+        <span
+          className={`memoTitle ${isTodo && memo.todo_done ? "memoDone" : ""}`}
+          style={{ color: isTodo && memo.todo_done ? undefined : memo.color }}
+        >
           {memo.title}
         </span>
       </button>
-
-      <div className="spacer" />
 
       <div className="memoRight">
         {/* [삭제]는 호버 시에만 */}

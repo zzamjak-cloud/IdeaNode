@@ -7,6 +7,8 @@ pub struct Category {
     pub title: String,
     pub color: String,
     pub position: i64,
+    pub archived: bool,
+    pub is_todo: bool,
     pub is_collapsed: bool,
     pub created_at: i64,
     pub updated_at: i64,
@@ -21,6 +23,7 @@ pub struct Memo {
     pub color: String,
     pub date_ymd: String,
     pub content_md: String,
+    pub todo_done: bool,
     pub position: i64,
     pub created_at: i64,
     pub updated_at: i64,
@@ -37,6 +40,7 @@ pub struct CreateCategoryInput {
     pub emoji: Option<String>,
     pub title: String,
     pub color: String,
+    pub is_todo: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,6 +49,12 @@ pub struct UpdateCategoryInput {
     pub emoji: String,
     pub title: String,
     pub color: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SetCategoryArchivedInput {
+    pub id: String,
+    pub archived: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,6 +102,7 @@ pub struct UpdateMemoInput {
     pub color: String,
     pub date_ymd: String,
     pub content_md: String,
+    pub todo_done: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -13,6 +13,7 @@ type Props = {
   onOpenSettings: () => void;
   onDelete: () => void;
   onOpenMemo: (memo: Memo) => void;
+  onToggleTodoDone?: (memo: Memo, next: boolean) => void;
   onDeleteMemo: (memo: Memo) => void;
 };
 

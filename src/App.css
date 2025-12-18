@@ -35,9 +35,11 @@ body {
   align-items: center;
   gap: 12px;
   margin-bottom: 14px;
+  flex-wrap: nowrap;
 }
 .searchInput {
-  width: min(420px, 44vw);
+  width: 100%;
+  min-width: 0;
   padding-right: 34px;
 }
 
@@ -45,6 +47,15 @@ body {
   position: relative;
   display: inline-flex;
   align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.topBarRight {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
 }
 
 .searchClearBtn {
@@ -65,6 +76,177 @@ body {
 
 .addBtn:hover {
   opacity: 1;
+}
+
+.archiveBtn.dropTarget {
+  outline: 2px dashed rgba(34, 211, 238, 0.6);
+  outline-offset: 2px;
+}
+
+/* --- Archive window (Notion-like) --- */
+.archiveWindowRoot {
+  min-height: 100vh;
+  padding: 16px;
+}
+
+.archiveTopBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: nowrap;
+}
+
+.archiveCount {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.archiveSearchWrap {
+  width: auto;
+  flex: 1;
+  min-width: 0;
+}
+
+.archiveSearchInput {
+  width: 100%;
+  padding-left: 10px;
+}
+
+.archiveList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.archiveRow {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* Memo window (separate) */
+.memoWindowRoot {
+  min-height: 100vh;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+.memoWindowBody {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 8px;
+}
+
+.archiveRow:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.archiveRowMain {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+}
+
+.archiveRowMain:hover .archiveRowTitle {
+  text-decoration: underline;
+}
+
+.archiveRowTitle {
+  font-size: 14px;
+  font-weight: 750;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.archiveRestoreBtn {
+  flex: 0 0 auto;
+  margin-right: 6px;
+}
+
+.archiveRowHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.archiveRowMeta {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.archiveMemoList {
+  padding: 6px 10px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.archiveMemoEmpty {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  padding: 6px 2px 2px;
+}
+
+.archiveMemoRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 2px;
+  border-radius: 10px;
+}
+
+.archiveMemoRow:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.archiveMemoTitle {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.82);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.archiveEmpty {
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 14px;
+  margin: 10px 0 12px;
+}
+
+.archiveEmptyTitle {
+  font-weight: 800;
+}
+
+.archiveEmptyDesc {
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .appTitle {
@@ -313,6 +495,19 @@ body {
   text-overflow: ellipsis;
 }
 
+.memoTitle.memoDone {
+  text-decoration: line-through;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.todoCheckbox {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  cursor: pointer;
+  accent-color: rgba(34, 211, 238, 0.9);
+}
+
 .memoDateText {
   font-size: 12px;
   font-weight: 700;
@@ -321,17 +516,32 @@ body {
   text-align: right;
 }
 
+.checkboxRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.78);
+  user-select: none;
+}
+
+.checkboxRow input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
 .memoRight {
   display: inline-flex;
   align-items: center;
   gap: 10px;
   margin-left: auto;
+  flex: 0 0 auto;
 }
 
 .categoryActions {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  flex: 0 0 auto;
 }
 
 .categoryAddBtn {

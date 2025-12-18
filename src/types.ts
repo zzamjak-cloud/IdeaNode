@@ -6,6 +6,8 @@ export type Category = {
   title: string;
   color: string;
   position: number;
+  archived: boolean;
+  is_todo: boolean;
   is_collapsed: boolean;
   created_at: number;
   updated_at: number;
@@ -19,6 +21,7 @@ export type Memo = {
   color: string;
   date_ymd: string;
   content_md: string;
+  todo_done: boolean;
   position: number;
   created_at: number;
   updated_at: number;
@@ -33,6 +36,7 @@ export type CreateCategoryInput = {
   emoji?: string;
   title: string;
   color: string;
+  is_todo: boolean;
 };
 
 export type UpdateCategoryInput = {
@@ -45,6 +49,11 @@ export type UpdateCategoryInput = {
 export type SetCategoryCollapsedInput = {
   id: ID;
   is_collapsed: boolean;
+};
+
+export type SetCategoryArchivedInput = {
+  id: ID;
+  archived: boolean;
 };
 
 export type ReorderCategoriesInput = {
@@ -80,6 +89,7 @@ export type UpdateMemoInput = {
   color: string;
   date_ymd: string;
   content_md: string;
+  todo_done: boolean;
 };
 
 export type MoveMemoInput = {

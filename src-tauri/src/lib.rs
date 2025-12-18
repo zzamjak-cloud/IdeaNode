@@ -20,6 +20,7 @@ pub fn run() {
             commands::set_background_color,
             commands::create_category,
             commands::update_category,
+            commands::set_category_archived,
             commands::set_category_collapsed,
             commands::delete_category,
             commands::reorder_categories,

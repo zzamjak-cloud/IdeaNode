@@ -5,18 +5,20 @@ import { ColorPicker } from "../../components/ColorPicker";
 type Props = {
   open: boolean;
   onClose: () => void;
-  onCreate: (input: { title: string; color: string }) => Promise<void>;
+  onCreate: (input: { title: string; color: string; is_todo: boolean }) => Promise<void>;
 };
 
 export function CreateCategoryModal({ open, onClose, onCreate }: Props) {
   const [title, setTitle] = useState("");
   const [color, setColor] = useState("#ffffff");
+  const [isTodo, setIsTodo] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setTitle("");
     setColor("#ffffff");
+    setIsTodo(false);
   }, [open]);
 
   return (
@@ -35,7 +37,7 @@ export function CreateCategoryModal({ open, onClose, onCreate }: Props) {
             onClick={async () => {
               setSaving(true);
               try {
-                await onCreate({ title: title.trim(), color });
+                await onCreate({ title: title.trim(), color, is_todo: isTodo });
                 onClose();
               } finally {
                 setSaving(false);
@@ -56,6 +58,18 @@ export function CreateCategoryModal({ open, onClose, onCreate }: Props) {
         <label className="field">
           <div className="label">컬러</div>
           <ColorPicker value={color} onChange={setColor} />
+        </label>
+
+        <label className="field">
+          <div className="label">Todo list</div>
+          <label className="checkboxRow">
+            <input
+              type="checkbox"
+              checked={isTodo}
+              onChange={(e) => setIsTodo(e.currentTarget.checked)}
+            />
+            <span>이 카테고리의 메모를 Todo로 사용</span>
+          </label>
         </label>
       </div>
     </Modal>

@@ -11,6 +11,7 @@ type ModalProps = {
   headerContent?: ReactNode;
   hideBody?: boolean;
   placement?: "center" | "top";
+  zIndex?: number;
 };
 
 export function Modal({
@@ -24,6 +25,7 @@ export function Modal({
   headerContent,
   hideBody,
   placement = "center",
+  zIndex = 100,
 }: ModalProps) {
   useEffect(() => {
     if (!open) return;
@@ -37,9 +39,14 @@ export function Modal({
   if (!open) return null;
 
   return (
-    <div className={`modalOverlay ${placement === "top" ? "top" : ""}`} role="dialog" aria-modal="true">
-      <button className="modalBackdrop" onClick={onClose} aria-label="배경 닫기" />
-      <div className="modalCard">
+    <div
+      className={`modalOverlay ${placement === "top" ? "top" : ""}`}
+      role="dialog"
+      aria-modal="true"
+      style={{ zIndex }}
+    >
+      <button className="modalBackdrop" onClick={onClose} aria-label="배경 닫기" style={{ zIndex }} />
+      <div className="modalCard" style={{ zIndex: zIndex + 1 }}>
         <div className="modalHeader">
           {headerContent ? (
             headerContent

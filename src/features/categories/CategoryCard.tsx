@@ -13,6 +13,7 @@ type Props = {
   onDelete: () => void;
   onOpenMemo: (memo: Memo) => void;
   onDeleteMemo: (memo: Memo) => void;
+  onToggleTodoDone?: (memo: Memo, next: boolean) => void;
   dragHandleProps?: HTMLAttributes<HTMLElement>;
   setDragHandleRef?: (element: HTMLElement | null) => void;
   cardClassName?: string;
@@ -28,6 +29,7 @@ export function CategoryCard({
   onDelete,
   onOpenMemo,
   onDeleteMemo,
+  onToggleTodoDone,
   dragHandleProps,
   setDragHandleRef,
   cardClassName,
@@ -85,8 +87,6 @@ export function CategoryCard({
             </button>
           </div>
 
-          <div className="spacer" />
-
           {/* 카테고리 기능 아이콘: 제목바 hover에서만 */}
           <div className="categoryActions">
             {/* [접기][삭제]는 호버 시에만 */}
@@ -121,6 +121,8 @@ export function CategoryCard({
                     <SortableMemoRow
                       key={m.id}
                       memo={m}
+                      isTodo={category.is_todo}
+                      onToggleTodo={(next) => onToggleTodoDone?.(m, next)}
                       disabled={!dndEnabled}
                       onOpen={() => onOpenMemo(m)}
                       onDelete={() => onDeleteMemo(m)}
