@@ -1,0 +1,748 @@
+:root {
+  color-scheme: light dark;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  --bg: #0b1020;
+  --panel: rgba(255, 255, 255, 0.06);
+  --panel2: rgba(255, 255, 255, 0.1);
+  --text: rgba(255, 255, 255, 0.92);
+  --muted: rgba(255, 255, 255, 0.62);
+  --border: rgba(255, 255, 255, 0.12);
+  --shadow: rgba(0, 0, 0, 0.35);
+  --primary: #4f46e5;
+  --danger: #ef4444;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(1200px 600px at 20% 0%, rgba(79, 70, 229, 0.25), transparent 60%),
+    radial-gradient(900px 500px at 80% 20%, rgba(34, 211, 238, 0.16), transparent 60%),
+    var(--bg);
+  color: var(--text);
+}
+
+.appRoot {
+  min-height: 100vh;
+}
+
+.page {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.searchInput {
+  width: min(420px, 44vw);
+  padding-right: 34px;
+}
+
+.searchWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.searchClearBtn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.6;
+}
+
+.searchClearBtn:hover {
+  opacity: 1;
+}
+
+.addBtn {
+  opacity: 1; /* + 버튼은 항상 또렷하게 */
+}
+
+.addBtn:hover {
+  opacity: 1;
+}
+
+.appTitle {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: var(--panel2);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn.primary {
+  border-color: rgba(79, 70, 229, 0.35);
+  background: rgba(79, 70, 229, 0.22);
+}
+
+.iconOnlyBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  opacity: 0.5;
+}
+
+.iconOnlyBtn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  opacity: 1;
+}
+
+.iconOnlyBtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.35);
+  opacity: 1;
+}
+
+.iconOnlyBtn.danger {
+  color: #fecaca;
+}
+
+.hoverOnly {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.categoryTitleBar:hover .hoverOnlyCategory,
+.memoListItem:hover .hoverOnlyMemo {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.categoryTitleBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.categoryTitleDragArea {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.categoryTitleDragArea:active {
+  cursor: grabbing;
+}
+
+.categoryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.categoryCard {
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: 0 12px 30px var(--shadow);
+  overflow: hidden;
+}
+
+.categoryCard.over {
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.35), 0 18px 50px rgba(0, 0, 0, 0.6);
+  border-color: rgba(34, 211, 238, 0.6) !important;
+}
+
+.categoryHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.categoryTitle {
+  font-weight: 700;
+  font-size: 14px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.categoryTitleBtn {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.categoryTitleBtn:hover .categoryTitleText {
+  text-decoration: underline;
+}
+
+.categoryTitleText {
+  font-weight: 800;
+  font-size: 14px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.categoryBody {
+  padding: 10px;
+}
+
+.emptyHint {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 10px;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+}
+
+.memoList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.memoListItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.memoMainBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  cursor: grab;
+  min-width: 0;
+  flex: 1;
+  touch-action: none;
+  user-select: none;
+}
+
+.memoMainBtn:active {
+  cursor: grabbing;
+}
+
+.categoryCard.isDragging,
+.memoListItem.isDragging {
+  opacity: 0.55;
+}
+
+.categoryCard.dropTarget {
+  outline: 2px dashed rgba(34, 211, 238, 0.55);
+  outline-offset: 2px;
+}
+
+.memoListItem.dropTarget {
+  outline: 2px dashed rgba(34, 211, 238, 0.45);
+  outline-offset: 2px;
+}
+
+.dragOverlayCard {
+  width: 360px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(15, 23, 42, 0.92);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
+  padding: 12px;
+}
+
+.dragOverlayTitle {
+  font-weight: 800;
+}
+
+.memoMainBtn:hover .memoTitle {
+  text-decoration: underline;
+}
+
+.memoTitle {
+  font-size: 14px;
+  color: var(--text);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.memoDateText {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+  text-align: right;
+}
+
+.memoRight {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.categoryActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.categoryAddBtn {
+  opacity: 1;
+}
+
+.emojiPicker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.emojiPickerPanel {
+  max-height: 300px;
+  overflow: auto;
+}
+
+.popoverPortal {
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(15, 23, 42, 0.96);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
+  padding: 12px;
+  backdrop-filter: blur(12px);
+}
+
+.popoverInner {
+  width: 100%;
+}
+
+/* emoji-picker-react compact */
+.emojiPickerPanel .EmojiPickerReact,
+.emojiPickerPanel .epr-main,
+.popoverInner .EmojiPickerReact,
+.popoverInner .epr-main {
+  --epr-emoji-size: 18px;
+  --epr-emoji-gap: 6px;
+  --epr-picker-height: 320px;
+  --epr-category-navigation-button-size: 28px;
+  --epr-search-input-height: 30px;
+}
+
+.categoryEmoji {
+  margin-right: 6px;
+}
+
+.memoEmoji {
+  margin-right: 6px;
+}
+
+.memoHeaderEmojiWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.emojiBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  opacity: 1;
+}
+
+.emojiBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.popoverBackdrop {
+  position: fixed;
+  inset: 0;
+  background: transparent;
+  border: none;
+  z-index: 999;
+}
+
+.globalError {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  right: 16px;
+  padding: 12px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.18);
+  color: #fecaca;
+  z-index: 50;
+}
+
+.globalLoading {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.25);
+  z-index: 50;
+  color: var(--muted);
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.modalOverlay.top {
+  place-items: start center;
+  padding-top: 72px;
+}
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  border: none;
+  z-index: 100;
+}
+
+.modalCard {
+  position: relative;
+  width: min(980px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(15, 23, 42, 0.88);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
+  z-index: 101;
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modalTitle {
+  font-weight: 700;
+}
+
+.modalHeaderRight {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.memoEditorHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.memoHeaderTitleInput {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 800;
+  padding: 8px 10px;
+  border-radius: 12px;
+}
+
+.memoHeaderControls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.colorMenuWrap {
+  position: relative;
+}
+
+.popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 120;
+  width: 320px;
+  max-height: 420px;
+  overflow: auto;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(15, 23, 42, 0.96);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
+  padding: 12px;
+}
+
+.datePickerWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.dateDisplay {
+  white-space: nowrap;
+}
+
+.dateInputOverlay {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.memoEditorBody {
+  display: block;
+}
+
+.modalBody {
+  padding: 12px;
+  overflow: auto;
+  flex: 1 1 auto;
+}
+
+.modalFooter {
+  padding: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  flex: 0 0 auto;
+  background: rgba(15, 23, 42, 0.92);
+}
+
+.modalFooterRow {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.confirmBody {
+  padding: 6px 2px;
+}
+
+.confirmTitle {
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.confirmDesc {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+input {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.colorInput {
+  width: 44px;
+  height: 36px;
+  padding: 0;
+  border-radius: 10px;
+}
+
+.mdEditorWrap {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.richEditorWrap {
+  min-height: 420px;
+  max-height: 60vh;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  overflow: auto;
+}
+
+.tiptapEditor {
+  min-height: 420px;
+  max-height: 60vh;
+  padding: 14px 14px;
+  outline: none;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.tiptapEditor p {
+  margin: 0 0 10px 0;
+}
+
+.tiptapEditor h1,
+.tiptapEditor h2,
+.tiptapEditor h3 {
+  margin: 14px 0 10px 0;
+}
+
+.tiptapEditor ul,
+.tiptapEditor ol {
+  margin: 0 0 10px 4px;
+}
+
+.tiptapEditor blockquote {
+  margin: 10px 0;
+  padding-left: 3px;
+  border-left: 3px solid rgba(34, 211, 238, 0.35);
+  color: var(--muted);
+}
+
+.tiptapEditor code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+    monospace;
+  font-size: 0.92em;
+}
+
+.tiptapEditor pre {
+  margin: 10px 0;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.35);
+  overflow: auto;
+}
+
+.tiptapEditor .is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: rgba(255, 255, 255, 0.45);
+  pointer-events: none;
+  height: 0;
+}
+
+.colorPicker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.colorPresets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.colorPreset {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  cursor: pointer;
+}
+
+.colorPreset.active {
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.35);
+}
+
+.emptyHero {
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
+  padding: 18px;
+  margin-bottom: 14px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.emptyHeroTitle {
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.emptyHeroDesc {
+  color: var(--muted);
+}
