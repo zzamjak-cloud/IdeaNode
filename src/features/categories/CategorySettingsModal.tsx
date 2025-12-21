@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftFromLine, Archive, Palette } from "lucide-react";
+import { ArrowLeftFromLine, Archive } from "lucide-react";
 import { Modal } from "../../components/Modal";
-import { ColorPicker } from "../../components/ColorPicker";
+import { ColorPicker, TEXT_COLOR_PRESETS } from "../../components/ColorPicker";
 import { EmojiPicker } from "../../components/EmojiPicker";
 import { AnchoredPopover } from "../../components/AnchoredPopover";
 import type { Category } from "../../types";
@@ -30,6 +30,7 @@ export function CategorySettingsModal({ open, category, onClose, onSave }: Props
   const [color, setColor] = useState(initial.color);
   const [colorOpen, setColorOpen] = useState(false);
   const colorWrapRef = useRef<HTMLDivElement | null>(null);
+  const colorChipRef = useRef<HTMLButtonElement | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const emojiBtnRef = useRef<HTMLButtonElement | null>(null);
   const [confirmArchive, setConfirmArchive] = useState<null | { nextArchived: boolean }>(null);
@@ -115,6 +116,7 @@ export function CategorySettingsModal({ open, category, onClose, onSave }: Props
         title={confirmArchive?.nextArchived ? "보관" : "복원"}
         onClose={() => setConfirmArchive(null)}
         zIndex={1000}
+        submitOnEnter
         footer={
           <div className="modalFooterRow">
             <button className="btn" onClick={() => setConfirmArchive(null)}>
@@ -163,33 +165,27 @@ export function CategorySettingsModal({ open, category, onClose, onSave }: Props
             {emoji?.trim().length ? emoji : "➕"}
           </button>
 
-          <input
-            className="memoHeaderTitleInput"
-            value={title}
-            onChange={(e) => setTitle(e.currentTarget.value)}
-            style={{ color }}
-            placeholder="카테고리 제목"
-            aria-label="카테고리 제목"
-          />
+          <div className="titleInputWrap" ref={colorWrapRef}>
+            <input
+              className="memoHeaderTitleInput"
+              value={title}
+              onChange={(e) => setTitle(e.currentTarget.value)}
+              style={{ color }}
+              placeholder="카테고리 제목"
+              aria-label="카테고리 제목"
+            />
+            <button
+              type="button"
+              className="titleColorChipBtn"
+              ref={colorChipRef}
+              onClick={() => setColorOpen((v) => !v)}
+              aria-label="텍스트 컬러 변경"
+              title="텍스트 컬러"
+              style={{ background: color }}
+            />
+          </div>
 
           <div className="memoHeaderControls">
-            <div className="colorMenuWrap" ref={colorWrapRef}>
-              <button
-                className="iconOnlyBtn"
-                type="button"
-                onClick={() => setColorOpen((v) => !v)}
-                aria-label="텍스트 컬러 변경"
-                title="텍스트 컬러"
-              >
-                <Palette size={18} />
-              </button>
-              {colorOpen ? (
-                <div className="popover">
-                  <ColorPicker value={color} onChange={setColor} />
-                </div>
-              ) : null}
-            </div>
-
             {category ? (
               <button
                 className="iconOnlyBtn"
@@ -223,6 +219,19 @@ export function CategorySettingsModal({ open, category, onClose, onSave }: Props
               setEmojiOpen(false);
             }}
           />
+        </div>
+      </AnchoredPopover>
+
+      <AnchoredPopover
+        open={open && colorOpen}
+        anchorRef={colorChipRef}
+        width={360}
+        maxHeight={420}
+        placement="bottom-end"
+        onClose={() => setColorOpen(false)}
+      >
+        <div className="popoverInner">
+          <ColorPicker value={color} presets={TEXT_COLOR_PRESETS} onChange={setColor} />
         </div>
       </AnchoredPopover>
     </>

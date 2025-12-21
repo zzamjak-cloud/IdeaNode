@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
-import { Palette, Save, X } from "lucide-react";
+import { Save, X } from "lucide-react";
 import { Modal } from "../../components/Modal";
-import { ColorPicker } from "../../components/ColorPicker";
+import { ColorPicker, TEXT_COLOR_PRESETS } from "../../components/ColorPicker";
 import { EmojiPicker } from "../../components/EmojiPicker";
 import { AnchoredPopover } from "../../components/AnchoredPopover";
 import type { Memo } from "../../types";
@@ -61,6 +61,7 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
   const debounceRef = useRef<number | null>(null);
   const [colorOpen, setColorOpen] = useState(false);
   const colorWrapRef = useRef<HTMLDivElement | null>(null);
+  const colorChipRef = useRef<HTMLButtonElement | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const emojiWrapRef = useRef<HTMLDivElement | null>(null);
   const emojiBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -291,33 +292,27 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
             </button>
           </div>
 
-          <input
-            className="memoHeaderTitleInput"
-            value={title}
-            onChange={(e) => setTitle(e.currentTarget.value)}
-            style={{ color }}
-            placeholder="메모 제목"
-            aria-label="메모 제목"
-          />
+          <div className="titleInputWrap" ref={colorWrapRef}>
+            <input
+              className="memoHeaderTitleInput"
+              value={title}
+              onChange={(e) => setTitle(e.currentTarget.value)}
+              style={{ color }}
+              placeholder="메모 제목"
+              aria-label="메모 제목"
+            />
+            <button
+              type="button"
+              className="titleColorChipBtn"
+              ref={colorChipRef}
+              onClick={() => setColorOpen((v) => !v)}
+              aria-label="텍스트 컬러 변경"
+              title="텍스트 컬러"
+              style={{ background: color }}
+            />
+          </div>
 
           <div className="memoHeaderControls">
-            <div className="colorMenuWrap" ref={colorWrapRef}>
-              <button
-                className="iconOnlyBtn"
-                type="button"
-                onClick={() => setColorOpen((v) => !v)}
-                aria-label="텍스트 컬러 변경"
-                title="텍스트 컬러"
-              >
-                <Palette size={18} />
-              </button>
-              {colorOpen ? (
-                <div className="popover">
-                  <ColorPicker value={color} onChange={setColor} />
-                </div>
-              ) : null}
-            </div>
-
             <div className="datePickerWrap" title="메모 날짜">
               <div className="dateDisplay">{formatYmdShort(dateYmd)}</div>
               <input
@@ -373,6 +368,19 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
             setEmojiOpen(false);
           }}
         />
+      </div>
+    </AnchoredPopover>
+
+    <AnchoredPopover
+      open={open && colorOpen}
+      anchorRef={colorChipRef}
+      width={360}
+      maxHeight={420}
+      placement="bottom-end"
+      onClose={() => setColorOpen(false)}
+    >
+      <div className="popoverInner">
+        <ColorPicker value={color} presets={TEXT_COLOR_PRESETS} onChange={setColor} />
       </div>
     </AnchoredPopover>
     </>

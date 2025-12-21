@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowRightFromLine, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowRightFromLine, Palette, X } from "lucide-react";
 import { listen } from "@tauri-apps/api/event";
 import { useAppStore } from "../store/appStore";
 import type { CategoryWithMemos } from "../types";
 import { Modal } from "../components/Modal";
+import { BACKGROUND_COLOR_PRESETS, ColorPicker } from "../components/ColorPicker";
 
 function ArchiveCategoryRow({
   item,
@@ -76,10 +77,14 @@ function ArchiveCategoryRow({
 }
 
 export default function ArchiveWindow() {
-  const { categories, refresh, setCategoryArchived } = useAppStore();
+  const { categories, refresh, setCategoryArchived, settings, setBackgroundColorLocal, saveBackgroundColor } =
+    useAppStore();
   const [query, setQuery] = useState("");
   const [confirmRestore, setConfirmRestore] = useState<null | { id: string; title: string }>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [bgOpen, setBgOpen] = useState(false);
+  const bgWrapRef = useRef<HTMLDivElement | null>(null);
+  const bgDebounceRef = useRef<number | null>(null);
 
   useEffect(() => {
     refresh();
@@ -93,6 +98,30 @@ export default function ArchiveWindow() {
       unlisten?.();
     };
   }, [refresh]);
+
+  useEffect(() => {
+    const defaultBg = "#0b1020";
+    const next = settings.background_color?.trim().length ? settings.background_color : defaultBg;
+    document.documentElement.style.setProperty("--bg", next);
+  }, [settings.background_color]);
+
+  useEffect(() => {
+    if (!bgOpen) return;
+    const onMouseDown = (e: MouseEvent) => {
+      const t = e.target as Node | null;
+      if (!t) return;
+      if (bgWrapRef.current && !bgWrapRef.current.contains(t)) setBgOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setBgOpen(false);
+    };
+    window.addEventListener("mousedown", onMouseDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", onMouseDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [bgOpen]);
 
   const archived = useMemo(() => {
     const all = categories.filter((c) => c.category.archived).sort((a, b) => a.category.position - b.category.position);
@@ -112,7 +141,7 @@ export default function ArchiveWindow() {
             className="searchInput archiveSearchInput"
             value={query}
             onChange={(e) => setQuery(e.currentTarget.value)}
-            placeholder="보관함 검색"
+            placeholder="검색"
             aria-label="보관함 검색"
           />
           {query.trim().length ? (
@@ -128,6 +157,32 @@ export default function ArchiveWindow() {
           ) : null}
         </div>
         <div className="spacer" />
+        <div className="colorMenuWrap" ref={bgWrapRef}>
+          <button
+            className="iconOnlyBtn"
+            type="button"
+            onClick={() => setBgOpen((v) => !v)}
+            aria-label="배경 컬러 설정"
+            title="배경 컬러"
+          >
+            <Palette size={18} />
+          </button>
+          {bgOpen ? (
+            <div className="popover">
+              <ColorPicker
+                value={settings.background_color?.trim().length ? settings.background_color : "#0b1020"}
+                presets={BACKGROUND_COLOR_PRESETS}
+                onChange={(next) => {
+                  setBackgroundColorLocal(next);
+                  if (bgDebounceRef.current) window.clearTimeout(bgDebounceRef.current);
+                  bgDebounceRef.current = window.setTimeout(() => {
+                    saveBackgroundColor({ background_color: next });
+                  }, 500);
+                }}
+              />
+            </div>
+          ) : null}
+        </div>
         <div className="archiveCount">{archived.length}</div>
       </div>
 
@@ -136,6 +191,7 @@ export default function ArchiveWindow() {
         title="복원"
         onClose={() => setConfirmRestore(null)}
         zIndex={1000}
+        submitOnEnter
         footer={
           <div className="modalFooterRow">
             <button className="btn" onClick={() => setConfirmRestore(null)}>

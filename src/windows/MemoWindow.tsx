@@ -2,12 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
-import { Palette } from "lucide-react";
+import { ColorPicker, TEXT_COLOR_PRESETS } from "../components/ColorPicker";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { emit } from "@tauri-apps/api/event";
 import { AnchoredPopover } from "../components/AnchoredPopover";
-import { ColorPicker } from "../components/ColorPicker";
 import { EmojiPicker } from "../components/EmojiPicker";
 import { api } from "../lib/tauri";
 import { formatYmdShort } from "../lib/date";
@@ -19,7 +18,7 @@ type Mode =
   | { kind: "edit"; memo: Memo };
 
 export default function MemoWindow() {
-  const { categories, refresh } = useAppStore();
+  const { categories, refresh, settings } = useAppStore();
 
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const memoId = params.get("memo");
@@ -47,6 +46,12 @@ export default function MemoWindow() {
     }).then((fn) => (unlisten = fn));
     return () => unlisten?.();
   }, [refresh]);
+
+  useEffect(() => {
+    const defaultBg = "#0b1020";
+    const next = settings.background_color?.trim().length ? settings.background_color : defaultBg;
+    document.documentElement.style.setProperty("--bg", next);
+  }, [settings.background_color]);
 
   // ---- 이하 MemoEditorModal 로직을 "창 전용 UI"로 렌더링 ----
   const AUTOSAVE_DEBOUNCE_MS = 1200;
@@ -77,6 +82,7 @@ export default function MemoWindow() {
 
   const [colorOpen, setColorOpen] = useState(false);
   const colorWrapRef = useRef<HTMLDivElement | null>(null);
+  const colorChipRef = useRef<HTMLButtonElement | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const emojiBtnRef = useRef<HTMLButtonElement | null>(null);
 
@@ -275,14 +281,25 @@ export default function MemoWindow() {
           {emoji?.trim().length ? emoji : "➕"}
         </button>
 
-        <input
-          className="memoHeaderTitleInput"
-          value={title}
-          onChange={(e) => setTitle(e.currentTarget.value)}
-          style={{ color }}
-          placeholder="메모 제목"
-          aria-label="메모 제목"
-        />
+        <div className="titleInputWrap" ref={colorWrapRef}>
+          <input
+            className="memoHeaderTitleInput"
+            value={title}
+            onChange={(e) => setTitle(e.currentTarget.value)}
+            style={{ color }}
+            placeholder="메모 제목"
+            aria-label="메모 제목"
+          />
+          <button
+            type="button"
+            className="titleColorChipBtn"
+            ref={colorChipRef}
+            onClick={() => setColorOpen((v) => !v)}
+            aria-label="텍스트 컬러 변경"
+            title="텍스트 컬러"
+            style={{ background: color }}
+          />
+        </div>
 
         <div className="memoHeaderControls">
           <div className="datePickerWrap" title="메모 날짜">
@@ -294,17 +311,6 @@ export default function MemoWindow() {
               onChange={(e) => setDateYmd(e.currentTarget.value)}
               aria-label="메모 날짜 선택"
             />
-          </div>
-
-          <div className="colorMenuWrap" ref={colorWrapRef}>
-            <button className="iconOnlyBtn" type="button" onClick={() => setColorOpen((v) => !v)} aria-label="텍스트 컬러 변경" title="텍스트 컬러">
-              <Palette size={18} />
-            </button>
-            {colorOpen ? (
-              <div className="popover">
-                <ColorPicker value={color} onChange={setColor} />
-              </div>
-            ) : null}
           </div>
         </div>
       </div>
@@ -328,6 +334,19 @@ export default function MemoWindow() {
               setEmojiOpen(false);
             }}
           />
+        </div>
+      </AnchoredPopover>
+
+      <AnchoredPopover
+        open={colorOpen}
+        anchorRef={colorChipRef}
+        width={360}
+        maxHeight={420}
+        placement="bottom-end"
+        onClose={() => setColorOpen(false)}
+      >
+        <div className="popoverInner">
+          <ColorPicker value={color} presets={TEXT_COLOR_PRESETS} onChange={setColor} />
         </div>
       </AnchoredPopover>
     </main>

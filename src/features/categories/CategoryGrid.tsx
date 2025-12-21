@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Archive, Palette, Plus, X } from "lucide-react";
 import { useAppStore } from "../../store/appStore";
 import type { Category, Memo } from "../../types";
-import { ColorPicker } from "../../components/ColorPicker";
+import { BACKGROUND_COLOR_PRESETS, ColorPicker } from "../../components/ColorPicker";
 import { Modal } from "../../components/Modal";
 import {
   DndContext,
@@ -66,14 +66,34 @@ export function CategoryGrid() {
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [bgOpen]);
-  const openMemoWindow = async (url: string, label: string, title: string) => {
+  const sleep = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms));
+
+  const closeAllMemoWindows = async () => {
     try {
-      const existing = await WebviewWindow.getByLabel(label);
-      if (existing) {
-        await existing.setFocus();
-        return;
+      const all = await WebviewWindow.getAll();
+      const memoWins = all.filter((w) => w.label === "memo" || w.label.startsWith("memo-") || w.label.startsWith("memo-new-"));
+      for (const w of memoWins) {
+        try {
+          await w.destroy();
+        } catch {
+          try {
+            await w.close();
+          } catch {}
+        }
       }
-      new WebviewWindow(label, {
+    } catch {
+      // ignore
+    }
+  };
+
+  // 메모 편집창은 "항상 1개만" 유지: 클릭 시 기존 창(들) 닫고 새 창으로 교체
+  const openMemoWindow = async (url: string, title: string) => {
+    try {
+      await closeAllMemoWindows();
+      // 닫기 반영 타이밍(특히 macOS) 여유
+      await sleep(40);
+
+      new WebviewWindow("memo", {
         title,
         width: 900,
         height: 720,
@@ -87,14 +107,12 @@ export function CategoryGrid() {
   };
 
   const openMemoEdit = async (memo: Memo) => {
-    await openMemoWindow(`/?memo=${encodeURIComponent(memo.id)}`, `memo-${memo.id}`, memo.title || "메모");
+    await openMemoWindow(`/?memo=${encodeURIComponent(memo.id)}`, memo.title || "메모");
   };
 
   const openMemoCreate = async (categoryId: string, defColor: string) => {
-    const label = `memo-new-${categoryId}-${Date.now()}`;
     await openMemoWindow(
       `/?create_category_id=${encodeURIComponent(categoryId)}&default_color=${encodeURIComponent(defColor)}`,
-      label,
       "새 메모",
     );
   };
@@ -134,7 +152,29 @@ export function CategoryGrid() {
     try {
       const existing = await WebviewWindow.getByLabel("archive");
       if (existing) {
-        await existing.setFocus();
+        try {
+          await existing.show();
+        } catch {}
+        try {
+          await existing.unminimize();
+        } catch {}
+        try {
+          await existing.setAlwaysOnTop(true);
+        } catch {}
+        try {
+          await sleep(30);
+          await existing.setFocus();
+          await sleep(30);
+          await existing.setFocus();
+        } finally {
+          try {
+            await sleep(30);
+            await existing.setAlwaysOnTop(false);
+          } catch {}
+        }
+        try {
+          await existing.requestUserAttention(1);
+        } catch {}
         return;
       }
       // SPA이므로 query로 분기
@@ -160,7 +200,7 @@ export function CategoryGrid() {
             className="searchInput"
             value={query}
             onChange={(e) => setQuery(e.currentTarget.value)}
-            placeholder="검색 (카테고리/메모 제목)"
+            placeholder="검색"
             aria-label="검색"
           />
           {query.trim().length ? (
@@ -202,6 +242,7 @@ export function CategoryGrid() {
               <div className="popover">
                 <ColorPicker
                   value={settings.background_color?.trim().length ? settings.background_color : "#0b1020"}
+                  presets={BACKGROUND_COLOR_PRESETS}
                   onChange={(next) => {
                     // 미리보기는 즉시(로컬 상태만), 저장은 0.5s 디바운스
                     setBackgroundColorLocal(next);
@@ -385,6 +426,7 @@ export function CategoryGrid() {
         open={Boolean(confirm)}
         title="삭제"
         onClose={() => setConfirm(null)}
+        submitOnEnter
         footer={
           <div className="modalFooterRow">
             <button className="btn" onClick={() => setConfirm(null)}>

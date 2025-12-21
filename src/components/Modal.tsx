@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 
 type ModalProps = {
   open: boolean;
@@ -12,6 +12,7 @@ type ModalProps = {
   hideBody?: boolean;
   placement?: "center" | "top";
   zIndex?: number;
+  submitOnEnter?: boolean;
 };
 
 export function Modal({
@@ -26,15 +27,34 @@ export function Modal({
   hideBody,
   placement = "center",
   zIndex = 100,
+  submitOnEnter = false,
 }: ModalProps) {
+  const cardRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
+      if (!submitOnEnter) return;
+      if (e.key !== "Enter") return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = (e.target as HTMLElement | null) ?? null;
+      // 텍스트 입력/에디터에서 Enter는 줄바꿈/확정이므로 모달 submit으로 가로채지 않음
+      if (el) {
+        const tag = el.tagName?.toLowerCase();
+        if (tag === "textarea") return;
+        if (el.isContentEditable) return;
+      }
+      const root = cardRef.current;
+      if (!root) return;
+      const primary = root.querySelector<HTMLButtonElement>("button.btn.primary:not([disabled])");
+      if (!primary) return;
+      e.preventDefault();
+      primary.click();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
+  }, [open, onClose, submitOnEnter]);
 
   if (!open) return null;
 
@@ -46,7 +66,7 @@ export function Modal({
       style={{ zIndex }}
     >
       <button className="modalBackdrop" onClick={onClose} aria-label="배경 닫기" style={{ zIndex }} />
-      <div className="modalCard" style={{ zIndex: zIndex + 1 }}>
+      <div className="modalCard" ref={cardRef} style={{ zIndex: zIndex + 1 }}>
         <div className="modalHeader">
           {headerContent ? (
             headerContent

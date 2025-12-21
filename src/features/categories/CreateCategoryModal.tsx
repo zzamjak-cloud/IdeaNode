@@ -26,6 +26,7 @@ export function CreateCategoryModal({ open, onClose, onCreate }: Props) {
       open={open}
       title="새 카테고리"
       onClose={onClose}
+      submitOnEnter
       footer={
         <div className="modalFooterRow">
           <button className="btn" onClick={onClose} disabled={saving}>

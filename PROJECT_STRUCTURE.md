@@ -44,9 +44,9 @@
   - `SortableMemoRow.tsx`: 카테고리 내 메모 Sortable 행(이모지/제목/삭제/날짜 표시)
 - `components/*`
   - `Modal.tsx`: 공통 모달(헤더 커스텀/상단 배치/바디 숨김 등)
-  - `ColorPicker.tsx`: 텍스트 컬러 프리셋 + 커스텀
+  - `ColorPicker.tsx`: 텍스트 컬러 프리셋(`TEXT_COLOR_PRESETS`) + 배경 컬러 프리셋 20개(`BACKGROUND_COLOR_PRESETS`) + 커스텀
   - `EmojiPicker.tsx`: emoji-picker-react 기반 이모지 선택 + 직접 입력
-  - `AnchoredPopover.tsx`: 앵커 기준 popover를 `document.body`에 포탈 렌더링(창/모달에 의해 잘리지 않게)
+  - `AnchoredPopover.tsx`: 앵커 기준 popover를 `document.body`에 포탈 렌더링(창/모달에 의해 잘리지 않게) + `bottom-end` 배치/뷰포트 클램프
 - `store/appStore.ts`
   - Zustand 스토어: `categories`, `settings`, CRUD/refresh 액션
 - `lib/tauri.ts`
@@ -92,6 +92,7 @@
 
 ## 주요 UX/동작 원칙
 - **텍스트 컬러**: 카테고리/메모의 `color`는 점/원형이 아니라 **텍스트 자체에 적용**
+- **텍스트 컬러 변경 UI**: 카테고리/메모 제목 입력 필드 **우측 원형 컬러칩** 클릭으로 프리셋 선택(팝오버는 portal로 렌더링되어 잘리지 않음)
 - **아이콘 노출 규칙(hover-only)**:
   - 카테고리 제목바 hover → 카테고리 기능 아이콘
   - 메모 row hover → 해당 메모의 삭제 버튼만
@@ -103,12 +104,17 @@
   - 검색 중에는 혼란 방지를 위해 DnD 비활성화
 - **삭제 확인**:
   - `window.confirm` 대신 앱 내부 Confirm 모달(tauri/webview 호환성)
+- **모달 키보드 UX**:
+  - Dim 클릭으로 닫힘
+  - 확인/삭제/생성 등 확인 모달에서는 Enter 키로 primary 버튼 실행(`submitOnEnter`)
 - **자동 저장**:
   - 디바운스 저장(기본 1.2초) + 닫기 직전 flush 저장
   - create 모드에서도 초안 메모를 즉시 생성해 유실 방지
 - **멀티 윈도우**:
   - 보관함/메모 편집은 별도 창으로 열어(좌우 배치 등) 작은 메인 창에서도 편집 UX가 유지되도록 함
   - 창 간 동기화는 `ideanode:data_changed` 이벤트로 refresh
+  - 메모 편집창은 UX 안정성을 위해 **항상 1개만 유지**(메모 클릭 시 기존 메모 창들을 닫고 `memo` 창을 새로 오픈)
+  - 배경 컬러 프리셋은 메인/보관함/메모창/모달/팝오버 모두 동일하게 적용(CSS var `--bg` 기반)
 
 ---
 
@@ -159,4 +165,17 @@
 - **반응형 개선**
   - 상단바에서 불필요한 텍스트 제거, 검색창이 가변 폭으로 줄어들며 버튼은 항상 표시
   - 카테고리/메모 row에서 텍스트 영역을 최대 사용하도록 flex 구조 조정
+
+### v0.2.1 (2025-12-21)
+- **배경 컬러 프리셋 확장**
+  - 배경 프리셋을 20개로 확장(`BACKGROUND_COLOR_PRESETS`)
+  - 메인/보관함/메모창/모달/팝오버가 모두 동일 프리셋(`--bg`)을 적용하도록 통일
+- **텍스트 컬러 UX 개선**
+  - 텍스트 컬러 변경 버튼을 팔레트 아이콘 → **제목 입력 필드 우측 원형 컬러칩**으로 변경
+  - 컬러 프리셋 팝업은 `AnchoredPopover`(portal)로 렌더링 + 우측 끝에서도 잘리지 않도록 `bottom-end` 배치/클램프
+- **모달 UX 개선**
+  - Dim 클릭으로 닫기
+  - Enter 키로 primary 버튼 실행(`submitOnEnter`)
+- **메모 편집창 뎁스/다중창 이슈 대응**
+  - 메모 클릭 시 기존 메모 창을 포커싱하는 대신, **기존 메모 편집창(들)을 닫고 단일 `memo` 창을 새로 열어** 최상단/단일창 정책을 보장
 

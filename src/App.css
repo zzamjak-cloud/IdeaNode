@@ -70,11 +70,11 @@ body {
 }
 
 .addBtn {
-  opacity: 1; /* + 버튼은 항상 또렷하게 */
+  opacity: 0.3;
 }
 
 .addBtn:hover {
-  opacity: 1;
+  opacity: 0.6;
 }
 
 .archiveBtn.dropTarget {
@@ -275,13 +275,14 @@ body {
 }
 
 .btn:disabled {
-  opacity: 0.6;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
 .btn.primary {
-  border-color: rgba(79, 70, 229, 0.35);
-  background: rgba(79, 70, 229, 0.22);
+  /* 전역 프리셋 톤(중립)으로 통일: 취소 버튼과 동일 계열 */
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .iconOnlyBtn {
@@ -292,24 +293,30 @@ body {
   border-radius: 10px;
   border: none;
   background: transparent;
-  color: var(--text);
+  /* 버튼 컬러는 고유(중립 톤) + 투명도로 배경에 자연스럽게 섞이게 */
+  color: rgba(255, 255, 255, 0.9);
   cursor: pointer;
-  opacity: 0.5;
+  opacity: 0.3;
 }
 
 .iconOnlyBtn:hover {
   background: rgba(255, 255, 255, 0.06);
-  opacity: 1;
+  opacity: 0.6;
 }
 
 .iconOnlyBtn:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.35);
-  opacity: 1;
+  opacity: 0.75;
 }
 
 .iconOnlyBtn.danger {
-  color: #fecaca;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.iconOnlyBtn:disabled {
+  opacity: 0.2;
+  cursor: not-allowed;
 }
 
 .hoverOnly {
@@ -411,9 +418,7 @@ body {
 .emptyHint {
   color: var(--muted);
   font-size: 13px;
-  padding: 10px;
-  border: 1px dashed rgba(255, 255, 255, 0.18);
-  border-radius: 12px;
+  padding: 6px 2px;
 }
 
 .memoList {
@@ -422,16 +427,20 @@ body {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 2px;
 }
 
 .memoListItem {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 10px;
+  padding: 6px 2px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: none;
+  background: transparent;
+}
+
+.memoListItem:hover {
   background: rgba(255, 255, 255, 0.04);
 }
 
@@ -544,7 +553,7 @@ body {
 }
 
 .categoryAddBtn {
-  opacity: 1;
+  opacity: 0.3;
 }
 
 .emojiPicker {
@@ -561,7 +570,8 @@ body {
 .popoverPortal {
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(15, 23, 42, 0.96);
+  /* 전역 배경 프리셋(--bg)을 모든 팝오버/픽커에도 동일 적용 */
+  background: color-mix(in srgb, var(--bg) 84%, #000 16%);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
   padding: 12px;
   backdrop-filter: blur(12px);
@@ -677,12 +687,14 @@ body {
   max-height: calc(100vh - 24px);
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(15, 23, 42, 0.88);
+  /* 모달/알림창도 IdeaNode 배경 프리셋을 동일하게 받도록 */
+  background: color-mix(in srgb, var(--bg) 82%, #000 18%);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
   z-index: 101;
   backdrop-filter: blur(12px);
   display: flex;
   flex-direction: column;
+  overflow: hidden; /* 내부 섹션(footer 등)의 배경이 라운드를 깨지 않도록 클리핑 */
 }
 
 .modalHeader {
@@ -719,10 +731,48 @@ body {
   border-radius: 12px;
 }
 
+.titleInputWrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.titleInputWrap .memoHeaderTitleInput {
+  width: 100%;
+  padding-right: 42px; /* 우측 컬러칩 공간 */
+  box-sizing: border-box; /* padding 포함 너비 계산(겹침 방지) */
+}
+
+.titleColorChipBtn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  padding: 0;
+  cursor: pointer;
+  opacity: 0.9;
+}
+
+.titleColorChipBtn:hover {
+  border-color: rgba(255, 255, 255, 0.45);
+  opacity: 1;
+}
+
+.titleColorChipBtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
 .memoHeaderControls {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  flex: 0 0 auto; /* 제목 입력이 컨트롤 영역을 덮지 않게 고정 */
 }
 
 .colorMenuWrap {
@@ -739,7 +789,7 @@ body {
   overflow: auto;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(15, 23, 42, 0.96);
+  background: color-mix(in srgb, var(--bg) 84%, #000 16%);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
   padding: 12px;
 }
@@ -784,7 +834,7 @@ body {
   padding: 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   flex: 0 0 auto;
-  background: rgba(15, 23, 42, 0.92);
+  background: color-mix(in srgb, var(--bg) 82%, #000 18%);
 }
 
 .modalFooterRow {
