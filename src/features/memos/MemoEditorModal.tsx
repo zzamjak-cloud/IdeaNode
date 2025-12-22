@@ -178,6 +178,9 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
           // (Alt/Option 단독은 OS/에디터 기본 이동과 충돌하는 환경이 있어 배제)
           "Ctrl-Shift-Alt-ArrowUp": () => move("up"),
           "Ctrl-Shift-Alt-ArrowDown": () => move("down"),
+          // macOS에서 Ctrl 조합이 먹지 않는 경우를 대비한 대안(⌘+⌥+⇧+↑/↓)
+          "Mod-Alt-Shift-ArrowUp": () => move("up"),
+          "Mod-Alt-Shift-ArrowDown": () => move("down"),
         };
       },
     });
