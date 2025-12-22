@@ -174,8 +174,10 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
         };
 
         return {
-          "Ctrl-ArrowUp": () => move("up"),
-          "Ctrl-ArrowDown": () => move("down"),
+          // Cursor/VS Code 스타일: 줄(블럭) 이동은 Alt(Option)+↑/↓
+          // Ctrl+↑/↓는 OS/에디터 기본 동작(문서/문단 이동)과 충돌하므로 사용하지 않음
+          "Alt-ArrowUp": () => move("up"),
+          "Alt-ArrowDown": () => move("down"),
         };
       },
     });
