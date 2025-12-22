@@ -312,12 +312,19 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
       // 블록의 시작 위치 기준으로 핸들 y를 계산
       let centerPx = 0;
       try {
-        const startPos = Math.min(doc.content.size, r.start + 1);
-        const endPos = Math.max(startPos, Math.min(doc.content.size, r.end - 1));
-        const startCoords = editor.view.coordsAtPos(startPos);
-        const endCoords = editor.view.coordsAtPos(endPos);
-        const centerY = (startCoords.top + endCoords.bottom) / 2;
-        centerPx = centerY - rect.top + scroller.scrollTop;
+        // coordsAtPos는 폰트 크기/라인박스를 완전히 반영 못하는 경우가 있어
+        // 실제 렌더링된 top-level 블록 DOM의 rect로 중심을 계산한다(헤더/본문 크기 차이 정확히 반영).
+        const root = editor.view.dom as HTMLElement;
+        const child = (root.children?.[r.idx] as HTMLElement | undefined) ?? undefined;
+        if (child) {
+          const br = child.getBoundingClientRect();
+          const centerY = (br.top + br.bottom) / 2;
+          centerPx = centerY - rect.top + scroller.scrollTop;
+        } else {
+          const startPos = Math.min(doc.content.size, r.start + 1);
+          const startCoords = editor.view.coordsAtPos(startPos);
+          centerPx = startCoords.top - rect.top + scroller.scrollTop;
+        }
       } catch {
         centerPx = clientY - rect.top + scroller.scrollTop;
       }
