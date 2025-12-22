@@ -174,10 +174,10 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
         };
 
         return {
-          // Cursor/VS Code 스타일: 줄(블럭) 이동은 Alt(Option)+↑/↓
-          // Ctrl+↑/↓는 OS/에디터 기본 동작(문서/문단 이동)과 충돌하므로 사용하지 않음
-          "Alt-ArrowUp": () => move("up"),
-          "Alt-ArrowDown": () => move("down"),
+          // 충돌 가능성이 낮은 조합으로 고정: Ctrl+Shift+Alt+↑/↓
+          // (Alt/Option 단독은 OS/에디터 기본 이동과 충돌하는 환경이 있어 배제)
+          "Ctrl-Shift-Alt-ArrowUp": () => move("up"),
+          "Ctrl-Shift-Alt-ArrowDown": () => move("down"),
         };
       },
     });
