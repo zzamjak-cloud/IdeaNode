@@ -115,6 +115,8 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
     topPx: number; // within richEditorShell
     pos: number; // prosemirror pos (for range calc)
   } | null>(null);
+  const hoverHideTimerRef = useRef<number | null>(null);
+  const handleHoveringRef = useRef(false);
   const dragRef = useRef<{
     active: boolean;
     from: number;
@@ -286,6 +288,20 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
 
     // 중요: 거터(핸들 영역)로 마우스를 옮겨도 핸들이 사라지지 않게
     // "현재 Y좌표"만으로 가장 가까운 블록을 찾는다.
+    const clearHideTimer = () => {
+      if (hoverHideTimerRef.current) window.clearTimeout(hoverHideTimerRef.current);
+      hoverHideTimerRef.current = null;
+    };
+
+    const scheduleHide = () => {
+      clearHideTimer();
+      hoverHideTimerRef.current = window.setTimeout(() => {
+        hoverHideTimerRef.current = null;
+        if (handleHoveringRef.current) return;
+        setHoverBlock(null);
+      }, 220);
+    };
+
     const pickBlockFromY = (clientY: number) => {
       const rect = scroller.getBoundingClientRect();
       if (clientY < rect.top || clientY > rect.bottom) return null;
@@ -294,28 +310,37 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
       const { doc } = editor.state;
       const r = getTopLevelBlockRange(doc, coords.pos);
       // 블록의 시작 위치 기준으로 핸들 y를 계산
-      let topPx = 0;
+      let centerPx = 0;
       try {
-        const startCoords = editor.view.coordsAtPos(Math.min(doc.content.size, r.start + 1));
-        topPx = startCoords.top - rect.top + scroller.scrollTop;
+        const startPos = Math.min(doc.content.size, r.start + 1);
+        const endPos = Math.max(startPos, Math.min(doc.content.size, r.end - 1));
+        const startCoords = editor.view.coordsAtPos(startPos);
+        const endCoords = editor.view.coordsAtPos(endPos);
+        const centerY = (startCoords.top + endCoords.bottom) / 2;
+        centerPx = centerY - rect.top + scroller.scrollTop;
       } catch {
-        topPx = clientY - rect.top + scroller.scrollTop;
+        centerPx = clientY - rect.top + scroller.scrollTop;
       }
-      return { pos: r.start + 1, topPx };
+      return { pos: r.start + 1, centerPx };
     };
 
     const onMove = (e: PointerEvent) => {
       if (dragRef.current?.active) return;
       const picked = pickBlockFromY(e.clientY);
       if (!picked) {
-        setHoverBlock(null);
+        // 핸들로 이동하는 순간/라인 경계에서 잠깐 벗어나도 바로 숨기지 않음
+        if (!handleHoveringRef.current) scheduleHide();
         return;
       }
-      setHoverBlock({ show: true, topPx: picked.topPx, pos: picked.pos });
+      clearHideTimer();
+      setHoverBlock({ show: true, topPx: picked.centerPx, pos: picked.pos });
     };
 
     window.addEventListener("pointermove", onMove, true);
-    return () => window.removeEventListener("pointermove", onMove, true);
+    return () => {
+      window.removeEventListener("pointermove", onMove, true);
+      clearHideTimer();
+    };
   }, [open, editor]);
 
   const startBlockDrag = (e: React.MouseEvent) => {
@@ -850,8 +875,22 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
             <button
               type="button"
               className={`blockDragHandle${hoverBlock?.show ? " visible" : ""}`}
-              style={{ top: hoverBlock ? hoverBlock.topPx + 6 : 0 }}
+              style={{ top: hoverBlock ? hoverBlock.topPx : 0 }}
               onMouseDown={startBlockDrag}
+              onMouseEnter={() => {
+                handleHoveringRef.current = true;
+                if (hoverHideTimerRef.current) window.clearTimeout(hoverHideTimerRef.current);
+                hoverHideTimerRef.current = null;
+              }}
+              onMouseLeave={() => {
+                handleHoveringRef.current = false;
+                // 핸들에서 빠져도 즉시 숨기지 않음
+                if (hoverHideTimerRef.current) window.clearTimeout(hoverHideTimerRef.current);
+                hoverHideTimerRef.current = window.setTimeout(() => {
+                  hoverHideTimerRef.current = null;
+                  if (!handleHoveringRef.current) setHoverBlock(null);
+                }, 220);
+              }}
               aria-label="블록 이동"
               title="블록 이동"
             >

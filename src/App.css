@@ -860,6 +860,7 @@ body {
   z-index: 20;
   font-size: 14px;
   line-height: 1;
+  transform: translateY(-50%); /* 라인 중앙 정렬 */
 }
 
 .blockDragHandle.visible {
