@@ -284,42 +284,29 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
     const scroller = editorScrollRef.current;
     if (!scroller) return;
 
-    const shell = scroller.parentElement as HTMLElement | null; // richEditorShell
-    if (!shell) return;
-
-    const isHandleEl = (t: EventTarget | null) => {
-      const el = t as HTMLElement | null;
-      return !!el && el.classList?.contains("blockDragHandle");
-    };
-
-    const pickBlockFromPoint = (clientX: number, clientY: number) => {
-      const el = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
-      if (!el) return null;
-      const block = el.closest("p, h1, h2, h3, blockquote, pre, ul, ol, li") as HTMLElement | null;
-      if (!block) return null;
-      // editor 외부 요소 제외
-      if (!editor.view.dom.contains(block)) return null;
-      let pos = 0;
+    // 중요: 거터(핸들 영역)로 마우스를 옮겨도 핸들이 사라지지 않게
+    // "현재 Y좌표"만으로 가장 가까운 블록을 찾는다.
+    const pickBlockFromY = (clientY: number) => {
+      const rect = scroller.getBoundingClientRect();
+      if (clientY < rect.top || clientY > rect.bottom) return null;
+      const coords = editor.view.posAtCoords({ left: rect.left + 40, top: clientY });
+      if (!coords) return null;
+      const { doc } = editor.state;
+      const r = getTopLevelBlockRange(doc, coords.pos);
+      // 블록의 시작 위치 기준으로 핸들 y를 계산
+      let topPx = 0;
       try {
-        pos = editor.view.posAtDOM(block, 0);
+        const startCoords = editor.view.coordsAtPos(Math.min(doc.content.size, r.start + 1));
+        topPx = startCoords.top - rect.top + scroller.scrollTop;
       } catch {
-        // posAtDOM이 안되면 coords로 fallback
-        const rect = scroller.getBoundingClientRect();
-        const coords = editor.view.posAtCoords({ left: rect.left + 40, top: clientY });
-        if (!coords) return null;
-        pos = coords.pos;
+        topPx = clientY - rect.top + scroller.scrollTop;
       }
-      const bcr = block.getBoundingClientRect();
-      const scrRect = scroller.getBoundingClientRect();
-      const topPx = bcr.top - scrRect.top + scroller.scrollTop;
-      return { pos, topPx };
+      return { pos: r.start + 1, topPx };
     };
 
     const onMove = (e: PointerEvent) => {
       if (dragRef.current?.active) return;
-      // 핸들 위로 올라가면 기존 hover 유지
-      if (isHandleEl(e.target)) return;
-      const picked = pickBlockFromPoint(e.clientX, e.clientY);
+      const picked = pickBlockFromY(e.clientY);
       if (!picked) {
         setHoverBlock(null);
         return;
