@@ -4,6 +4,7 @@ import { useAppStore } from "../../store/appStore";
 import type { Category, Memo } from "../../types";
 import { BACKGROUND_COLOR_PRESETS, ColorPicker } from "../../components/ColorPicker";
 import { Modal } from "../../components/Modal";
+import { MemoEditorModal } from "../memos/MemoEditorModal";
 import {
   DndContext,
   DragOverlay,
@@ -17,10 +18,12 @@ import { SortableCategoryCard } from "./SortableCategoryCard";
 import { CategorySettingsModal } from "./CategorySettingsModal";
 import { CreateCategoryModal } from "./CreateCategoryModal";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { emit } from "@tauri-apps/api/event";
 
 export function CategoryGrid() {
   const {
     categories,
+    refresh,
     createCategory,
     updateCategory,
     setCategoryCollapsed,
@@ -42,6 +45,13 @@ export function CategoryGrid() {
   const [bgOpen, setBgOpen] = useState(false);
   const bgWrapRef = useRef<HTMLDivElement | null>(null);
   const bgDebounceRef = useRef<number | null>(null);
+
+  type MemoModalMode =
+    | { kind: "create"; categoryId: string; defaultColor: string }
+    | { kind: "edit"; memo: Memo };
+
+  const [memoModalOpen, setMemoModalOpen] = useState(false);
+  const [memoModalMode, setMemoModalMode] = useState<MemoModalMode | null>(null);
 
   const [confirm, setConfirm] = useState<
     | null
@@ -68,53 +78,14 @@ export function CategoryGrid() {
   }, [bgOpen]);
   const sleep = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms));
 
-  const closeAllMemoWindows = async () => {
-    try {
-      const all = await WebviewWindow.getAll();
-      const memoWins = all.filter((w) => w.label === "memo" || w.label.startsWith("memo-") || w.label.startsWith("memo-new-"));
-      for (const w of memoWins) {
-        try {
-          await w.destroy();
-        } catch {
-          try {
-            await w.close();
-          } catch {}
-        }
-      }
-    } catch {
-      // ignore
-    }
+  const openMemoEdit = (memo: Memo) => {
+    setMemoModalMode({ kind: "edit", memo });
+    setMemoModalOpen(true);
   };
 
-  // 메모 편집창은 "항상 1개만" 유지: 클릭 시 기존 창(들) 닫고 새 창으로 교체
-  const openMemoWindow = async (url: string, title: string) => {
-    try {
-      await closeAllMemoWindows();
-      // 닫기 반영 타이밍(특히 macOS) 여유
-      await sleep(40);
-
-      new WebviewWindow("memo", {
-        title,
-        width: 900,
-        height: 720,
-        resizable: true,
-        url,
-      });
-    } catch (e) {
-      console.error("memo window open error", e);
-      window.alert(`메모 창을 열 수 없습니다.\n${String(e)}`);
-    }
-  };
-
-  const openMemoEdit = async (memo: Memo) => {
-    await openMemoWindow(`/?memo=${encodeURIComponent(memo.id)}`, memo.title || "메모");
-  };
-
-  const openMemoCreate = async (categoryId: string, defColor: string) => {
-    await openMemoWindow(
-      `/?create_category_id=${encodeURIComponent(categoryId)}&default_color=${encodeURIComponent(defColor)}`,
-      "새 메모",
-    );
+  const openMemoCreate = (categoryId: string, defColor: string) => {
+    setMemoModalMode({ kind: "create", categoryId, defaultColor: defColor });
+    setMemoModalOpen(true);
   };
 
   const filtered = useMemo(() => {
@@ -410,6 +381,24 @@ export function CategoryGrid() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onCreate={(input) => createCategory(input)}
+      />
+
+      <MemoEditorModal
+        open={memoModalOpen}
+        mode={memoModalMode}
+        onClose={() => {
+          setMemoModalOpen(false);
+          setMemoModalMode(null);
+        }}
+        onCreatedOrUpdated={async () => {
+          // 메인 창은 즉시 갱신, 다른 창(보관함 등)도 이벤트로 동기화
+          try {
+            await emit("ideanode:data_changed");
+          } catch {
+            // 이벤트가 실패하는 환경에서도 최소한 메인 창은 갱신
+            await refresh();
+          }
+        }}
       />
 
       <CategorySettingsModal
