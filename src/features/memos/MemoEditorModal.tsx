@@ -177,8 +177,6 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
           const { state, dispatch } = this.editor.view;
           const { doc, selection } = state;
           const from = selection.from;
-          const to = selection.to;
-          const isEmpty = selection.empty;
 
           const findListContext = ($pos: any) => {
             // listItem depth 찾기
@@ -215,9 +213,9 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
           // list children(listItem) 중 selection과 겹치는 아이템 범위 계산
           let pos = listStart;
           // selection이 list 밖으로 약간 튀는 경우가 있어 list content 범위로 clamp
-          // 커서만 있는 경우(empty)는 "현재 커서가 속한 listItem 1개"만 이동하도록 강제
+          // 선택 범위와 무관하게 from(커서 시작점)이 속한 단일 listItem만 이동
           const f = Math.max(listStart, Math.min(listEnd, from));
-          const t = isEmpty ? f : Math.max(listStart, Math.min(listEnd, to));
+          const t = f;  // 항상 from 위치만 사용하여 단일 listItem 이동
           const hits: { idx: number; start: number; end: number }[] = [];
           for (let i = 0; i < listNode.childCount; i++) {
             const child = listNode.child(i);
