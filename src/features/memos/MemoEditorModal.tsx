@@ -173,6 +173,84 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
           return true;
         };
 
+        const moveListItems = (dir: "up" | "down") => {
+          const { state, dispatch } = this.editor.view;
+          const { doc, selection } = state;
+          const from = selection.from;
+          const to = selection.to;
+
+          const $from = doc.resolve(from);
+          // listItem depth 찾기
+          let liDepth = -1;
+          for (let d = $from.depth; d > 0; d--) {
+            const name = $from.node(d).type.name;
+            if (name === "listItem" || name === "list_item") {
+              liDepth = d;
+              break;
+            }
+          }
+          if (liDepth < 1) return false;
+
+          const listDepth = liDepth - 1;
+          const listNode = $from.node(listDepth);
+          const listName = listNode.type.name;
+          if (listName !== "bulletList" && listName !== "orderedList" && listName !== "bullet_list" && listName !== "ordered_list") {
+            return false;
+          }
+
+          // selection이 동일 list 범위 밖으로 나가면 안전하게 포기
+          const listStart = $from.start(listDepth);
+          const listEnd = $from.end(listDepth);
+          if (to > listEnd || from < listStart) return false;
+
+          // list children(listItem) 중 selection과 겹치는 아이템 범위 계산
+          let pos = listStart;
+          const hits: { idx: number; start: number; end: number }[] = [];
+          for (let i = 0; i < listNode.childCount; i++) {
+            const child = listNode.child(i);
+            const start = pos;
+            const end = pos + child.nodeSize;
+            if (end >= from && start <= to) hits.push({ idx: i, start, end });
+            pos = end;
+          }
+          if (!hits.length) return false;
+
+          const startIdx = hits[0].idx;
+          const endIdx = hits[hits.length - 1].idx;
+          if (dir === "up" && startIdx === 0) return true;
+          if (dir === "down" && endIdx === listNode.childCount - 1) return true;
+
+          const selStart = hits[0].start;
+          const selEnd = hits[hits.length - 1].end;
+          const slice = doc.slice(selStart, selEnd);
+          const deletedSize = selEnd - selStart;
+
+          // target position은 같은 list content 안에서만 계산
+          let targetPos = selStart;
+          if (dir === "up") {
+            // 이전 아이템 시작
+            let p = listStart;
+            for (let i = 0; i < startIdx - 1; i++) p += listNode.child(i).nodeSize;
+            targetPos = p;
+          } else {
+            // 다음 아이템 뒤
+            let p = listStart;
+            for (let i = 0; i <= endIdx + 1; i++) p += listNode.child(i).nodeSize;
+            targetPos = p - deletedSize;
+          }
+
+          const tr = state.tr;
+          tr.delete(selStart, selEnd);
+          tr.insert(targetPos, slice.content);
+
+          const anchor = Math.max(listStart + 1, Math.min(tr.doc.content.size, targetPos + 1));
+          try {
+            tr.setSelection(Selection.near(tr.doc.resolve(anchor)));
+          } catch {}
+          dispatch(tr.scrollIntoView());
+          return true;
+        };
+
         const moveLinesWithinTextblock = (dir: "up" | "down") => {
           const { state, dispatch } = this.editor.view;
           const { doc, selection } = state;
@@ -248,6 +326,8 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
         };
 
         const move = (dir: "up" | "down") => {
+          // 0) 리스트 안에서는 listItem을 "라인"으로 취급해 먼저 이동
+          if (moveListItems(dir)) return true;
           // 1) 가능하면 같은 textblock 안에서 hard_break 기준으로 라인 이동
           if (moveLinesWithinTextblock(dir)) return true;
           // 2) 아니면 top-level block 이동(문단 단위)
