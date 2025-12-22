@@ -5,6 +5,8 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { TextStyle } from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
 import Highlight from "@tiptap/extension-highlight";
+import { Extension } from "@tiptap/core";
+import { Selection } from "@tiptap/pm/state";
 import { Save, X } from "lucide-react";
 import { Modal } from "../../components/Modal";
 import { ColorPicker, TEXT_COLOR_PRESETS } from "../../components/ColorPicker";
@@ -105,6 +107,79 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
     top: 0,
   });
   const selMenuRef = useRef<HTMLDivElement | null>(null);
+  const lastSelectionRef = useRef<{ from: number; to: number } | null>(null);
+
+  const MoveBlockShortcuts = useMemo(() => {
+    return Extension.create({
+      name: "ideanodeMoveBlocks",
+      addKeyboardShortcuts() {
+        const move = (dir: "up" | "down") => {
+          const { state, dispatch } = this.editor.view;
+          const { doc, selection } = state;
+          const from = selection.from;
+          const to = selection.to;
+
+          // top-level block 단위로만 이동(노션/코드 편집기의 "라인 이동" 느낌)
+          let pos = 0;
+          const ranges: { idx: number; start: number; end: number }[] = [];
+          for (let i = 0; i < doc.childCount; i++) {
+            const node = doc.child(i);
+            const start = pos;
+            const end = pos + node.nodeSize;
+            if (end >= from && start <= to) ranges.push({ idx: i, start, end });
+            pos = end;
+          }
+          if (!ranges.length) return false;
+          const startIdx = ranges[0].idx;
+          const endIdx = ranges[ranges.length - 1].idx;
+
+          if (dir === "up" && startIdx === 0) return true;
+          if (dir === "down" && endIdx === doc.childCount - 1) return true;
+
+          // 선택된 블럭 slice
+          const selStart = ranges[0].start;
+          const selEnd = ranges[ranges.length - 1].end;
+          const slice = doc.slice(selStart, selEnd);
+          const deletedSize = selEnd - selStart;
+
+          // 이동 대상 위치(원본 doc 기준)
+          let targetPos = 0;
+          if (dir === "up") {
+            // 이전 블럭 시작 위치
+            let p = 0;
+            for (let i = 0; i < startIdx - 1; i++) p += doc.child(i).nodeSize;
+            targetPos = p; // start of prev
+          } else {
+            // 다음 블럭 뒤 위치 = (endIdx+1) 블럭의 end
+            let p = 0;
+            for (let i = 0; i <= endIdx + 1; i++) p += doc.child(i).nodeSize;
+            targetPos = p; // end of next
+            // delete 후 좌측으로 당겨지는 만큼 보정
+            targetPos = targetPos - deletedSize;
+          }
+
+          const tr = state.tr;
+          tr.delete(selStart, selEnd);
+          tr.insert(targetPos, slice.content);
+
+          // 커서/선택 범위 재설정(이동된 블럭의 앞쪽으로)
+          const anchor = Math.max(0, Math.min(tr.doc.content.size, targetPos + 1));
+          try {
+            tr.setSelection(Selection.near(tr.doc.resolve(anchor)));
+          } catch {
+            // ignore
+          }
+          dispatch(tr.scrollIntoView());
+          return true;
+        };
+
+        return {
+          "Ctrl-ArrowUp": () => move("up"),
+          "Ctrl-ArrowDown": () => move("down"),
+        };
+      },
+    });
+  }, []);
 
   // create 모드에서 "초안"을 DB에 1회 생성하고 얻은 memoId를 통해 이후 자동 저장
   const [draftMemoId, setDraftMemoId] = useState<string | null>(null);
@@ -124,6 +199,7 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
       TextStyle,
       Color,
       Highlight.configure({ multicolor: true }),
+      MoveBlockShortcuts,
       Placeholder.configure({
         placeholder: "여기에 메모를 작성하세요…",
       }),
@@ -383,6 +459,7 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
         setSelMenu((s) => (s.open ? { ...s, open: false } : s));
         return;
       }
+      lastSelectionRef.current = { from, to };
       try {
         const a = editor.view.coordsAtPos(from);
         const b = editor.view.coordsAtPos(to);
@@ -638,13 +715,26 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
                 />
               ))}
               {headingMarkers.map((h) => (
-                <div
+                <button
                   key={`${h.key}:label`}
+                  type="button"
                   className={`headingRailLabel${activeHeadingKey === h.key ? " active" : ""}`}
                   style={{ top: `${h.topPct * 100}%` }}
+                  onClick={() => {
+                    const scroller = editorScrollRef.current;
+                    if (!scroller || !editor) return;
+                    scroller.scrollTo({ top: Math.max(0, h.domTop - 24), behavior: "smooth" });
+                    if (typeof h.pos === "number") {
+                      try {
+                        editor.commands.setTextSelection(h.pos);
+                        editor.commands.focus();
+                      } catch {}
+                    }
+                  }}
+                  aria-label={`제목 이동: ${h.text}`}
                 >
                   {h.text}
-                </div>
+                </button>
               ))}
             </div>
           </div>
@@ -657,6 +747,10 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
         className="selectionToolbar"
         ref={selMenuRef}
         style={{ left: selMenu.left, top: selMenu.top, transform: "translate(-50%, -100%)" }}
+        onMouseDown={(e) => {
+          // 툴바 클릭 시 selection이 깨지는 것을 방지(색 적용 안 되는 원인)
+          e.preventDefault();
+        }}
       >
         <div className="selectionToolbarRow">
           <div className="selectionToolbarLabel">텍스트</div>
@@ -669,13 +763,21 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
                 style={{ background: p.value }}
                 aria-label={`텍스트 컬러 ${p.name}`}
                 title={p.name}
-                onClick={() => editor.chain().focus().setColor(p.value).run()}
+                onClick={() => {
+                  const r = lastSelectionRef.current;
+                  if (!r) return;
+                  editor.chain().setTextSelection(r).focus().setColor(p.value).run();
+                }}
               />
             ))}
             <button
               type="button"
               className="selectionClearBtn"
-              onClick={() => editor.chain().focus().unsetColor().run()}
+              onClick={() => {
+                const r = lastSelectionRef.current;
+                if (!r) return;
+                editor.chain().setTextSelection(r).focus().unsetColor().run();
+              }}
               aria-label="텍스트 컬러 제거"
               title="텍스트 컬러 제거"
             >
@@ -693,13 +795,21 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
                 className="selectionChip"
                 style={{ background: c }}
                 aria-label={`배경 컬러 ${c}`}
-                onClick={() => editor.chain().focus().setHighlight({ color: c }).run()}
+                onClick={() => {
+                  const r = lastSelectionRef.current;
+                  if (!r) return;
+                  editor.chain().setTextSelection(r).focus().setHighlight({ color: c }).run();
+                }}
               />
             ))}
             <button
               type="button"
               className="selectionClearBtn"
-              onClick={() => editor.chain().focus().unsetHighlight().run()}
+              onClick={() => {
+                const r = lastSelectionRef.current;
+                if (!r) return;
+                editor.chain().setTextSelection(r).focus().unsetHighlight().run();
+              }}
               aria-label="배경 컬러 제거"
               title="배경 컬러 제거"
             >

@@ -738,6 +738,17 @@ body {
   padding-right: 18px;
 }
 
+/* 스크롤바 표시는 숨김(스크롤은 유지) */
+.modalCard.memoEditorModalCard .richEditorScroll {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge (legacy) */
+}
+
+.modalCard.memoEditorModalCard .richEditorScroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
 .modalCard.memoEditorModalCard .tiptapEditor {
   min-height: 100%;
   max-height: none;
@@ -803,17 +814,28 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  padding: 6px 8px; /* 터치영역 확대(비활성도 박스 없이 클릭 가능) */
+  border-radius: 10px;
   transform: translateY(-50%);
 }
 
 .headingRailLabel.active {
-  padding: 6px 8px;
-  border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(0, 0, 0, 0.55);
   color: rgba(255, 255, 255, 0.92);
   transform: translateY(-50%);
+}
+
+.headingRailLabel:hover {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.headingRailLabel.active:hover {
+  border-color: rgba(34, 211, 238, 0.45);
 }
 
 /* 선택 텍스트 툴바 */
