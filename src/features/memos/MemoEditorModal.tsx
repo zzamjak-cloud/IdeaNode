@@ -199,10 +199,11 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
               listName === "bullet_list" ||
               listName === "ordered_list";
             if (!isList) return null;
-            const listPos = $pos.before(listDepth); // document position before list node
-            const listStart = listPos + 1; // start of list content
-            const listEnd = listPos + listNode.nodeSize - 1; // end of list content
-            return { liDepth, listDepth, listNode, listPos, listStart, listEnd };
+            // start/end를 쓰면 nested list에서도 안정적으로 list content 범위를 얻을 수 있음
+            const listStart = $pos.start(listDepth);
+            const listEnd = $pos.end(listDepth);
+            const listKey = $pos.before(listDepth); // list node의 document position (동일 리스트 판정용)
+            return { liDepth, listDepth, listNode, listKey, listStart, listEnd };
           };
 
           const $from = doc.resolve(from);
@@ -211,19 +212,19 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
           const ctxTo = findListContext($to);
           if (!ctxFrom || !ctxTo) return false;
           // selection이 같은 리스트 안에서만 "항목 이동"으로 처리
-          if (ctxFrom.listPos !== ctxTo.listPos) return false;
+          if (ctxFrom.listKey !== ctxTo.listKey) return false;
           const { listNode, listStart, listEnd } = ctxFrom;
 
           // list children(listItem) 중 selection과 겹치는 아이템 범위 계산
           let pos = listStart;
+          // selection이 list 밖으로 약간 튀는 경우가 있어 list content 범위로 clamp
+          const f = Math.max(listStart, Math.min(listEnd, from));
+          const t = Math.max(listStart, Math.min(listEnd, to));
           const hits: { idx: number; start: number; end: number }[] = [];
           for (let i = 0; i < listNode.childCount; i++) {
             const child = listNode.child(i);
             const start = pos;
             const end = pos + child.nodeSize;
-            // selection이 list 밖으로 약간 튀는 경우가 있어 list content 범위로 clamp
-            const f = Math.max(listStart, Math.min(listEnd, from));
-            const t = Math.max(listStart, Math.min(listEnd, to));
             if (end >= f && start <= t) hits.push({ idx: i, start, end });
             pos = end;
           }
