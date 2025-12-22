@@ -73,8 +73,10 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
     text: string;
     topPct: number; // 0..1 within scroll container
     domTop: number; // absolute top within scroll content
+    pos: number | null; // prosemirror document position (stable)
   };
   const [headingMarkers, setHeadingMarkers] = useState<HeadingMarker[]>([]);
+  const [activeHeadingKey, setActiveHeadingKey] = useState<string | null>(null);
   const [railTip, setRailTip] = useState<{ text: string; topPx: number } | null>(null);
   const railRafRef = useRef<number | null>(null);
   const persistRafRef = useRef<number | null>(null);
@@ -222,10 +224,7 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
     const scroller = editorScrollRef.current;
     if (!scroller) return;
     const root = editor.view.dom as HTMLElement;
-    const contentRect = root.getBoundingClientRect();
     const scrollRect = scroller.getBoundingClientRect();
-    // root가 scroller 내부에 있어야 정상. 혹시 아닐 때도 계산이 완전히 망가지지 않게 보정.
-    const baseTop = contentRect.top - scrollRect.top + scroller.scrollTop;
     const hs = root.querySelectorAll("h1, h2, h3");
     const next: HeadingMarker[] = [];
     hs.forEach((node, idx) => {
@@ -238,15 +237,31 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
       const domTop = r.top - scrollRect.top + scroller.scrollTop; // scroller content 기준
       const denom = Math.max(1, scroller.scrollHeight);
       const topPct = Math.min(1, Math.max(0, domTop / denom));
+      let pos: number | null = null;
+      try {
+        pos = editor.view.posAtDOM(el, 0);
+      } catch {
+        pos = null;
+      }
       next.push({
         key: `${tag}:${idx}:${text.slice(0, 24)}`,
         level,
         text,
         topPct,
-        domTop: domTop - baseTop + baseTop, // keep numeric stable; baseTop currently unused but left for future
+        domTop,
+        pos,
       });
     });
     setHeadingMarkers(next);
+
+    // 현재 보고 있는 섹션(스크롤 위치 기준) 계산
+    const anchor = scroller.scrollTop + 40;
+    let active: string | null = null;
+    for (const h of next) {
+      if (h.domTop <= anchor) active = h.key;
+      else break;
+    }
+    setActiveHeadingKey(active);
   };
 
   const scheduleRecomputeHeadingRail = () => {
@@ -515,51 +530,48 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
       }
     >
       <div className="memoEditorBody">
-        <div className="richEditorWrap" ref={editorScrollRef}>
-          {editor ? <EditorContent editor={editor} /> : null}
-          <div className="headingRail" aria-hidden="true">
-            {headingMarkers.map((h) => (
-              <button
-                key={h.key}
-                type="button"
-                className={`headingRailMark level${h.level}`}
-                style={{ top: `${h.topPct * 100}%` }}
-                onMouseEnter={(e) => {
-                  const rail = (e.currentTarget.parentElement as HTMLElement | null) ?? null;
-                  if (!rail) return;
-                  const railRect = rail.getBoundingClientRect();
-                  const btnRect = e.currentTarget.getBoundingClientRect();
-                  setRailTip({ text: h.text, topPx: btnRect.top - railRect.top });
-                }}
-                onMouseLeave={() => setRailTip(null)}
-                onClick={() => {
-                  const scroller = editorScrollRef.current;
-                  if (!scroller || !editor) return;
-                  // 클릭 시 해당 헤더 위치로 이동
-                  scroller.scrollTo({ top: Math.max(0, h.domTop - 24), behavior: "smooth" });
-                  // 커서도 그 근처로 이동(가능하면 DOM -> pos 변환)
-                  try {
-                    const root = editor.view.dom as HTMLElement;
-                    const match = Array.from(root.querySelectorAll("h1, h2, h3")).find(
-                      (el) => (el as HTMLElement).textContent?.trim() === h.text,
-                    ) as HTMLElement | undefined;
-                    if (match) {
-                      const pos = editor.view.posAtDOM(match, 0);
-                      editor.commands.setTextSelection(pos);
-                      editor.commands.focus();
+        <div className="richEditorWrap">
+          <div className="richEditorShell">
+            <div className="richEditorScroll" ref={editorScrollRef}>
+              {editor ? <EditorContent editor={editor} /> : null}
+            </div>
+            <div className="headingRail" aria-hidden="true">
+              {headingMarkers.map((h) => (
+                <button
+                  key={h.key}
+                  type="button"
+                  className={`headingRailMark level${h.level}${activeHeadingKey === h.key ? " active" : ""}`}
+                  style={{ top: `${h.topPct * 100}%` }}
+                  onMouseEnter={(e) => {
+                    const rail = (e.currentTarget.parentElement as HTMLElement | null) ?? null;
+                    if (!rail) return;
+                    const railRect = rail.getBoundingClientRect();
+                    const btnRect = e.currentTarget.getBoundingClientRect();
+                    setRailTip({ text: h.text, topPx: btnRect.top - railRect.top });
+                  }}
+                  onMouseLeave={() => setRailTip(null)}
+                  onClick={() => {
+                    const scroller = editorScrollRef.current;
+                    if (!scroller || !editor) return;
+                    scroller.scrollTo({ top: Math.max(0, h.domTop - 24), behavior: "smooth" });
+                    if (typeof h.pos === "number") {
+                      try {
+                        editor.commands.setTextSelection(h.pos);
+                        editor.commands.focus();
+                      } catch {
+                        // ignore
+                      }
                     }
-                  } catch {
-                    // ignore
-                  }
-                }}
-                aria-label={`제목 이동: ${h.text}`}
-              />
-            ))}
-            {railTip ? (
-              <div className="headingRailTooltip" style={{ top: railTip.topPx }}>
-                {railTip.text}
-              </div>
-            ) : null}
+                  }}
+                  aria-label={`제목 이동: ${h.text}`}
+                />
+              ))}
+              {railTip ? (
+                <div className="headingRailTooltip" style={{ top: railTip.topPx }}>
+                  {railTip.text}
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       </div>
