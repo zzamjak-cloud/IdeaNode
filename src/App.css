@@ -697,6 +697,91 @@ body {
   overflow: hidden; /* 내부 섹션(footer 등)의 배경이 라운드를 깨지 않도록 클리핑 */
 }
 
+/* Memo editor modal: 창 대비 80% 높이로 더 크게 + 내부 스크롤은 에디터에만 */
+.modalCard.memoEditorModalCard {
+  height: 80vh;
+  max-height: calc(100vh - 24px);
+}
+
+.modalCard.memoEditorModalCard .modalBody {
+  overflow: hidden;
+  padding: 12px;
+}
+
+.modalCard.memoEditorModalCard .memoEditorBody {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.modalCard.memoEditorModalCard .richEditorWrap {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  position: relative; /* 우측 헤더 레일 기준점 */
+}
+
+.modalCard.memoEditorModalCard .tiptapEditor {
+  min-height: 100%;
+  max-height: none;
+}
+
+/* 우측 헤더 레일(노션 스타일) */
+.headingRail {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  right: 6px;
+  width: 8px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.headingRailMark {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  height: 14px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(255, 255, 255, 0.18);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.headingRailMark.level2 {
+  height: 12px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.headingRailMark.level3 {
+  height: 10px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.headingRailMark:hover {
+  background: rgba(34, 211, 238, 0.55);
+}
+
+.headingRailTooltip {
+  position: absolute;
+  right: 14px;
+  max-width: 260px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.55);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
 .modalHeader {
   display: flex;
   align-items: center;

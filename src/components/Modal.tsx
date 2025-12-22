@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useRef } from "react";
 
 type ModalProps = {
   open: boolean;
@@ -13,6 +13,8 @@ type ModalProps = {
   placement?: "center" | "top";
   zIndex?: number;
   submitOnEnter?: boolean;
+  cardClassName?: string;
+  cardStyle?: CSSProperties;
 };
 
 export function Modal({
@@ -28,6 +30,8 @@ export function Modal({
   placement = "center",
   zIndex = 100,
   submitOnEnter = false,
+  cardClassName,
+  cardStyle,
 }: ModalProps) {
   const cardRef = useRef<HTMLDivElement | null>(null);
 
@@ -66,7 +70,11 @@ export function Modal({
       style={{ zIndex }}
     >
       <button className="modalBackdrop" onClick={onClose} aria-label="배경 닫기" style={{ zIndex }} />
-      <div className="modalCard" ref={cardRef} style={{ zIndex: zIndex + 1 }}>
+      <div
+        className={`modalCard ${cardClassName ?? ""}`}
+        ref={cardRef}
+        style={{ zIndex: zIndex + 1, ...(cardStyle ?? {}) }}
+      >
         <div className="modalHeader">
           {headerContent ? (
             headerContent

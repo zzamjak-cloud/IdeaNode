@@ -65,6 +65,19 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
   const [emojiOpen, setEmojiOpen] = useState(false);
   const emojiWrapRef = useRef<HTMLDivElement | null>(null);
   const emojiBtnRef = useRef<HTMLButtonElement | null>(null);
+  const editorScrollRef = useRef<HTMLDivElement | null>(null);
+
+  type HeadingMarker = {
+    key: string;
+    level: 1 | 2 | 3;
+    text: string;
+    topPct: number; // 0..1 within scroll container
+    domTop: number; // absolute top within scroll content
+  };
+  const [headingMarkers, setHeadingMarkers] = useState<HeadingMarker[]>([]);
+  const [railTip, setRailTip] = useState<{ text: string; topPx: number } | null>(null);
+  const railRafRef = useRef<number | null>(null);
+  const persistRafRef = useRef<number | null>(null);
 
   // create 모드에서 "초안"을 DB에 1회 생성하고 얻은 memoId를 통해 이후 자동 저장
   const [draftMemoId, setDraftMemoId] = useState<string | null>(null);
@@ -175,6 +188,75 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
     return draftMemoId;
   };
 
+  const storageKey = (id: string) => `ideanode:memo:lastpos:${id}`;
+
+  const persistLastPos = () => {
+    if (!open) return;
+    if (!editor) return;
+    const id = getActiveMemoId();
+    if (!id) return;
+    const scroller = editorScrollRef.current;
+    const scrollTop = scroller ? scroller.scrollTop : 0;
+    const pos = editor.state.selection.from;
+    try {
+      window.localStorage.setItem(
+        storageKey(id),
+        JSON.stringify({ pos, scrollTop, t: Date.now() }),
+      );
+    } catch {
+      // ignore
+    }
+  };
+
+  const schedulePersistLastPos = () => {
+    if (persistRafRef.current) window.cancelAnimationFrame(persistRafRef.current);
+    persistRafRef.current = window.requestAnimationFrame(() => {
+      persistRafRef.current = null;
+      persistLastPos();
+    });
+  };
+
+  const recomputeHeadingRail = () => {
+    if (!open) return;
+    if (!editor) return;
+    const scroller = editorScrollRef.current;
+    if (!scroller) return;
+    const root = editor.view.dom as HTMLElement;
+    const contentRect = root.getBoundingClientRect();
+    const scrollRect = scroller.getBoundingClientRect();
+    // root가 scroller 내부에 있어야 정상. 혹시 아닐 때도 계산이 완전히 망가지지 않게 보정.
+    const baseTop = contentRect.top - scrollRect.top + scroller.scrollTop;
+    const hs = root.querySelectorAll("h1, h2, h3");
+    const next: HeadingMarker[] = [];
+    hs.forEach((node, idx) => {
+      const el = node as HTMLElement;
+      const tag = el.tagName.toLowerCase();
+      const level = tag === "h1" ? 1 : tag === "h2" ? 2 : 3;
+      const text = (el.textContent ?? "").trim();
+      if (!text.length) return;
+      const r = el.getBoundingClientRect();
+      const domTop = r.top - scrollRect.top + scroller.scrollTop; // scroller content 기준
+      const denom = Math.max(1, scroller.scrollHeight);
+      const topPct = Math.min(1, Math.max(0, domTop / denom));
+      next.push({
+        key: `${tag}:${idx}:${text.slice(0, 24)}`,
+        level,
+        text,
+        topPct,
+        domTop: domTop - baseTop + baseTop, // keep numeric stable; baseTop currently unused but left for future
+      });
+    });
+    setHeadingMarkers(next);
+  };
+
+  const scheduleRecomputeHeadingRail = () => {
+    if (railRafRef.current) window.cancelAnimationFrame(railRafRef.current);
+    railRafRef.current = window.requestAnimationFrame(() => {
+      railRafRef.current = null;
+      recomputeHeadingRail();
+    });
+  };
+
   const getSnapshot = () => {
     const id = getActiveMemoId();
     if (!id) return null;
@@ -238,6 +320,86 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
     };
   }, [open, editor, emoji, title, color, dateYmd, content, draftMemoId, mode?.kind]);
 
+  // 마지막 커서/스크롤 위치 저장 + 복원
+  useEffect(() => {
+    if (!open) return;
+    if (!editor) return;
+
+    // selection 변화에 따라 커서 위치 저장
+    const onSelection = () => schedulePersistLastPos();
+    editor.on("selectionUpdate", onSelection);
+
+    // 스크롤 위치 저장 + 헤더 레일 갱신
+    const scroller = editorScrollRef.current;
+    const onScroll = () => {
+      schedulePersistLastPos();
+      scheduleRecomputeHeadingRail();
+    };
+    scroller?.addEventListener("scroll", onScroll, { passive: true });
+
+    // 초기 복원(메모 id가 준비된 뒤 수행)
+    const tryRestore = () => {
+      const id = getActiveMemoId();
+      if (!id) return;
+      let raw: string | null = null;
+      try {
+        raw = window.localStorage.getItem(storageKey(id));
+      } catch {
+        raw = null;
+      }
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw) as { pos?: number; scrollTop?: number };
+        const pos = typeof parsed.pos === "number" ? parsed.pos : null;
+        const scrollTop = typeof parsed.scrollTop === "number" ? parsed.scrollTop : null;
+        if (scrollTop != null && editorScrollRef.current) {
+          editorScrollRef.current.scrollTop = Math.max(0, scrollTop);
+        }
+        if (pos != null) {
+          const docSize = editor.state.doc.content.size;
+          const clamped = Math.max(0, Math.min(docSize, pos));
+          try {
+            editor.commands.setTextSelection(clamped);
+          } catch {
+            // ignore
+          }
+        }
+        // 레일도 즉시 갱신
+        scheduleRecomputeHeadingRail();
+      } catch {
+        // ignore
+      }
+    };
+
+    // open 직후/초안 생성 직후 모두 대응
+    const t1 = window.setTimeout(() => tryRestore(), 0);
+    const t2 = window.setTimeout(() => tryRestore(), 200);
+
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      editor.off("selectionUpdate", onSelection);
+      scroller?.removeEventListener("scroll", onScroll as EventListener);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editor, draftMemoId, mode?.kind]);
+
+  // 헤더 레일: editor 업데이트/리사이즈 시 갱신
+  useEffect(() => {
+    if (!open) return;
+    if (!editor) return;
+    const onUpdate = () => scheduleRecomputeHeadingRail();
+    editor.on("update", onUpdate);
+    const onResize = () => scheduleRecomputeHeadingRail();
+    window.addEventListener("resize", onResize);
+    // 최초 1회
+    scheduleRecomputeHeadingRail();
+    return () => {
+      editor.off("update", onUpdate);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [open, editor]);
+
   if (!mode) return null;
 
   const canSubmit = title.trim().length > 0;
@@ -272,11 +434,13 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
       open={open}
       onClose={async () => {
         // 닫기 전 마지막 1회 저장(가능한 경우)
+        persistLastPos();
         await flushSave();
         await onCreatedOrUpdated();
         onClose();
       }}
       hideDefaultClose
+      cardClassName="memoEditorModalCard"
       headerContent={
         <div className="memoEditorHeader">
           <div className="memoHeaderEmojiWrap" ref={emojiWrapRef}>
@@ -336,6 +500,7 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
             <button
               className="iconOnlyBtn"
               onClick={async () => {
+                persistLastPos();
                 await flushSave();
                 await onCreatedOrUpdated();
                 onClose();
@@ -350,7 +515,53 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
       }
     >
       <div className="memoEditorBody">
-        <div className="richEditorWrap">{editor ? <EditorContent editor={editor} /> : null}</div>
+        <div className="richEditorWrap" ref={editorScrollRef}>
+          {editor ? <EditorContent editor={editor} /> : null}
+          <div className="headingRail" aria-hidden="true">
+            {headingMarkers.map((h) => (
+              <button
+                key={h.key}
+                type="button"
+                className={`headingRailMark level${h.level}`}
+                style={{ top: `${h.topPct * 100}%` }}
+                onMouseEnter={(e) => {
+                  const rail = (e.currentTarget.parentElement as HTMLElement | null) ?? null;
+                  if (!rail) return;
+                  const railRect = rail.getBoundingClientRect();
+                  const btnRect = e.currentTarget.getBoundingClientRect();
+                  setRailTip({ text: h.text, topPx: btnRect.top - railRect.top });
+                }}
+                onMouseLeave={() => setRailTip(null)}
+                onClick={() => {
+                  const scroller = editorScrollRef.current;
+                  if (!scroller || !editor) return;
+                  // 클릭 시 해당 헤더 위치로 이동
+                  scroller.scrollTo({ top: Math.max(0, h.domTop - 24), behavior: "smooth" });
+                  // 커서도 그 근처로 이동(가능하면 DOM -> pos 변환)
+                  try {
+                    const root = editor.view.dom as HTMLElement;
+                    const match = Array.from(root.querySelectorAll("h1, h2, h3")).find(
+                      (el) => (el as HTMLElement).textContent?.trim() === h.text,
+                    ) as HTMLElement | undefined;
+                    if (match) {
+                      const pos = editor.view.posAtDOM(match, 0);
+                      editor.commands.setTextSelection(pos);
+                      editor.commands.focus();
+                    }
+                  } catch {
+                    // ignore
+                  }
+                }}
+                aria-label={`제목 이동: ${h.text}`}
+              />
+            ))}
+            {railTip ? (
+              <div className="headingRailTooltip" style={{ top: railTip.topPx }}>
+                {railTip.text}
+              </div>
+            ) : null}
+          </div>
+        </div>
       </div>
     </Modal>
     <AnchoredPopover
