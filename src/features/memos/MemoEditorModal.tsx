@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
+import { TextStyle } from "@tiptap/extension-text-style";
+import Color from "@tiptap/extension-color";
+import Highlight from "@tiptap/extension-highlight";
 import { Save, X } from "lucide-react";
 import { Modal } from "../../components/Modal";
 import { ColorPicker, TEXT_COLOR_PRESETS } from "../../components/ColorPicker";
@@ -77,9 +80,31 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
   };
   const [headingMarkers, setHeadingMarkers] = useState<HeadingMarker[]>([]);
   const [activeHeadingKey, setActiveHeadingKey] = useState<string | null>(null);
-  const [railTip, setRailTip] = useState<{ text: string; topPx: number } | null>(null);
   const railRafRef = useRef<number | null>(null);
   const persistRafRef = useRef<number | null>(null);
+
+  const HIGHLIGHT_PRESETS = useMemo(
+    () => [
+      "#00000000", // "없음" 자리(표시만)
+      "#FDE68A", // amber-200
+      "#BBF7D0", // green-200
+      "#BFDBFE", // blue-200
+      "#FBCFE8", // pink-200
+      "#DDD6FE", // violet-200
+      "#FED7AA", // orange-200
+      "#A7F3D0", // emerald-200
+      "#C7D2FE", // indigo-200
+      "#FECDD3", // rose-200
+    ],
+    [],
+  );
+
+  const [selMenu, setSelMenu] = useState<{ open: boolean; left: number; top: number }>({
+    open: false,
+    left: 0,
+    top: 0,
+  });
+  const selMenuRef = useRef<HTMLDivElement | null>(null);
 
   // create 모드에서 "초안"을 DB에 1회 생성하고 얻은 memoId를 통해 이후 자동 저장
   const [draftMemoId, setDraftMemoId] = useState<string | null>(null);
@@ -96,6 +121,9 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
   const editor = useEditor({
     extensions: [
       StarterKit,
+      TextStyle,
+      Color,
+      Highlight.configure({ multicolor: true }),
       Placeholder.configure({
         placeholder: "여기에 메모를 작성하세요…",
       }),
@@ -344,11 +372,38 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
     const onSelection = () => schedulePersistLastPos();
     editor.on("selectionUpdate", onSelection);
 
+    const updateSelectionMenu = () => {
+      if (!editor) return;
+      const { from, to, empty } = editor.state.selection;
+      if (empty || from === to) {
+        setSelMenu((s) => (s.open ? { ...s, open: false } : s));
+        return;
+      }
+      try {
+        const a = editor.view.coordsAtPos(from);
+        const b = editor.view.coordsAtPos(to);
+        const left = (Math.min(a.left, b.left) + Math.max(a.right, b.right)) / 2;
+        const top = Math.min(a.top, b.top) - 12;
+        const pad = 10;
+        const safeLeft = Math.max(pad, Math.min(window.innerWidth - pad, left));
+        const safeTop = Math.max(pad, Math.min(window.innerHeight - pad, top));
+        setSelMenu({ open: true, left: safeLeft, top: safeTop });
+      } catch {
+        setSelMenu((s) => (s.open ? { ...s, open: false } : s));
+      }
+    };
+
+    const onSelectionForMenu = () => updateSelectionMenu();
+    editor.on("selectionUpdate", onSelectionForMenu);
+    const onBlur = () => setSelMenu((s) => (s.open ? { ...s, open: false } : s));
+    editor.on("blur", onBlur);
+
     // 스크롤 위치 저장 + 헤더 레일 갱신
     const scroller = editorScrollRef.current;
     const onScroll = () => {
       schedulePersistLastPos();
       scheduleRecomputeHeadingRail();
+      updateSelectionMenu();
     };
     scroller?.addEventListener("scroll", onScroll, { passive: true });
 
@@ -394,6 +449,8 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
       window.clearTimeout(t1);
       window.clearTimeout(t2);
       editor.off("selectionUpdate", onSelection);
+      editor.off("selectionUpdate", onSelectionForMenu);
+      editor.off("blur", onBlur);
       scroller?.removeEventListener("scroll", onScroll as EventListener);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -542,14 +599,6 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
                   type="button"
                   className={`headingRailMark level${h.level}${activeHeadingKey === h.key ? " active" : ""}`}
                   style={{ top: `${h.topPct * 100}%` }}
-                  onMouseEnter={(e) => {
-                    const rail = (e.currentTarget.parentElement as HTMLElement | null) ?? null;
-                    if (!rail) return;
-                    const railRect = rail.getBoundingClientRect();
-                    const btnRect = e.currentTarget.getBoundingClientRect();
-                    setRailTip({ text: h.text, topPx: btnRect.top - railRect.top });
-                  }}
-                  onMouseLeave={() => setRailTip(null)}
                   onClick={() => {
                     const scroller = editorScrollRef.current;
                     if (!scroller || !editor) return;
@@ -566,16 +615,78 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
                   aria-label={`제목 이동: ${h.text}`}
                 />
               ))}
-              {railTip ? (
-                <div className="headingRailTooltip" style={{ top: railTip.topPx }}>
-                  {railTip.text}
+              {headingMarkers.map((h) => (
+                <div
+                  key={`${h.key}:label`}
+                  className={`headingRailLabel${activeHeadingKey === h.key ? " active" : ""}`}
+                  style={{ top: `${h.topPct * 100}%` }}
+                >
+                  {h.text}
                 </div>
-              ) : null}
+              ))}
             </div>
           </div>
         </div>
       </div>
     </Modal>
+
+    {selMenu.open && editor ? (
+      <div
+        className="selectionToolbar"
+        ref={selMenuRef}
+        style={{ left: selMenu.left, top: selMenu.top, transform: "translate(-50%, -100%)" }}
+      >
+        <div className="selectionToolbarRow">
+          <div className="selectionToolbarLabel">텍스트</div>
+          <div className="selectionChipRow">
+            {TEXT_COLOR_PRESETS.slice(0, 12).map((p) => (
+              <button
+                key={`tc:${p.value}`}
+                type="button"
+                className="selectionChip"
+                style={{ background: p.value }}
+                aria-label={`텍스트 컬러 ${p.name}`}
+                title={p.name}
+                onClick={() => editor.chain().focus().setColor(p.value).run()}
+              />
+            ))}
+            <button
+              type="button"
+              className="selectionClearBtn"
+              onClick={() => editor.chain().focus().unsetColor().run()}
+              aria-label="텍스트 컬러 제거"
+              title="텍스트 컬러 제거"
+            >
+              제거
+            </button>
+          </div>
+        </div>
+        <div className="selectionToolbarRow">
+          <div className="selectionToolbarLabel">배경</div>
+          <div className="selectionChipRow">
+            {HIGHLIGHT_PRESETS.slice(1).map((c) => (
+              <button
+                key={`bg:${c}`}
+                type="button"
+                className="selectionChip"
+                style={{ background: c }}
+                aria-label={`배경 컬러 ${c}`}
+                onClick={() => editor.chain().focus().setHighlight({ color: c }).run()}
+              />
+            ))}
+            <button
+              type="button"
+              className="selectionClearBtn"
+              onClick={() => editor.chain().focus().unsetHighlight().run()}
+              aria-label="배경 컬러 제거"
+              title="배경 컬러 제거"
+            >
+              제거
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null}
     <AnchoredPopover
       open={open && emojiOpen}
       anchorRef={emojiBtnRef}
