@@ -7,6 +7,7 @@ import Color from "@tiptap/extension-color";
 import Highlight from "@tiptap/extension-highlight";
 import { Extension } from "@tiptap/core";
 import { Selection } from "@tiptap/pm/state";
+import type { Node as PMNode } from "@tiptap/pm/model";
 import { Save, X } from "lucide-react";
 import { Modal } from "../../components/Modal";
 import { ColorPicker, TEXT_COLOR_PRESETS } from "../../components/ColorPicker";
@@ -108,6 +109,20 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
   });
   const selMenuRef = useRef<HTMLDivElement | null>(null);
   const lastSelectionRef = useRef<{ from: number; to: number } | null>(null);
+
+  const [hoverBlock, setHoverBlock] = useState<{
+    show: boolean;
+    topPx: number; // within richEditorShell
+    pos: number; // prosemirror pos (for range calc)
+  } | null>(null);
+  const dragRef = useRef<{
+    active: boolean;
+    from: number;
+    to: number;
+    slice: any; // Slice
+    dropPos: number;
+    indicatorTopPx: number;
+  } | null>(null);
 
   const MoveBlockShortcuts = useMemo(() => {
     return Extension.create({
@@ -219,6 +234,157 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
       setContent(editor.getHTML());
     },
   });
+
+  const getTopLevelBlockRange = (doc: PMNode, pos: number) => {
+    const $pos = doc.resolve(Math.max(0, Math.min(doc.content.size, pos)));
+    const idx = $pos.index(0);
+    let start = 0;
+    for (let i = 0; i < idx; i++) start += doc.child(i).nodeSize;
+    const node = doc.child(idx);
+    const end = start + node.nodeSize;
+    return { idx, start, end };
+  };
+
+  const computeDropPosFromClientY = (clientY: number) => {
+    if (!editor) return null;
+    const scroller = editorScrollRef.current;
+    if (!scroller) return null;
+    const rect = scroller.getBoundingClientRect();
+    const coords = editor.view.posAtCoords({ left: rect.left + 40, top: clientY });
+    if (!coords) return null;
+    const { doc } = editor.state;
+    const r = getTopLevelBlockRange(doc, coords.pos);
+    // 위/아래 절반으로 before/after 결정
+    let insertPos = r.start;
+    try {
+      // target block의 화면 위치로 half 판정
+      const dom = editor.view.nodeDOM(r.start) as HTMLElement | null;
+      if (dom) {
+        const br = dom.getBoundingClientRect();
+        const mid = br.top + br.height / 2;
+        insertPos = clientY < mid ? r.start : r.end;
+      } else {
+        insertPos = r.start;
+      }
+    } catch {
+      insertPos = r.start;
+    }
+    const indicatorTopPx = (() => {
+      // scroller content 기준 y 계산
+      const y = clientY - rect.top + scroller.scrollTop;
+      return Math.max(0, Math.min(scroller.scrollHeight, y));
+    })();
+    return { insertPos, indicatorTopPx };
+  };
+
+  // 블록 호버 감지 + 드래그 핸들 위치 계산
+  useEffect(() => {
+    if (!open) return;
+    if (!editor) return;
+    const scroller = editorScrollRef.current;
+    if (!scroller) return;
+
+    const shell = scroller.parentElement as HTMLElement | null; // richEditorShell
+    if (!shell) return;
+
+    const isHandleEl = (t: EventTarget | null) => {
+      const el = t as HTMLElement | null;
+      return !!el && el.classList?.contains("blockDragHandle");
+    };
+
+    const pickBlockFromPoint = (clientX: number, clientY: number) => {
+      const el = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+      if (!el) return null;
+      const block = el.closest("p, h1, h2, h3, blockquote, pre, ul, ol, li") as HTMLElement | null;
+      if (!block) return null;
+      // editor 외부 요소 제외
+      if (!editor.view.dom.contains(block)) return null;
+      let pos = 0;
+      try {
+        pos = editor.view.posAtDOM(block, 0);
+      } catch {
+        // posAtDOM이 안되면 coords로 fallback
+        const rect = scroller.getBoundingClientRect();
+        const coords = editor.view.posAtCoords({ left: rect.left + 40, top: clientY });
+        if (!coords) return null;
+        pos = coords.pos;
+      }
+      const bcr = block.getBoundingClientRect();
+      const scrRect = scroller.getBoundingClientRect();
+      const topPx = bcr.top - scrRect.top + scroller.scrollTop;
+      return { pos, topPx };
+    };
+
+    const onMove = (e: PointerEvent) => {
+      if (dragRef.current?.active) return;
+      // 핸들 위로 올라가면 기존 hover 유지
+      if (isHandleEl(e.target)) return;
+      const picked = pickBlockFromPoint(e.clientX, e.clientY);
+      if (!picked) {
+        setHoverBlock(null);
+        return;
+      }
+      setHoverBlock({ show: true, topPx: picked.topPx, pos: picked.pos });
+    };
+
+    window.addEventListener("pointermove", onMove, true);
+    return () => window.removeEventListener("pointermove", onMove, true);
+  }, [open, editor]);
+
+  const startBlockDrag = (e: React.MouseEvent) => {
+    if (!editor) return;
+    if (!hoverBlock) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const { doc } = editor.state;
+    const r = getTopLevelBlockRange(doc, hoverBlock.pos);
+    const slice = doc.slice(r.start, r.end);
+    dragRef.current = {
+      active: true,
+      from: r.start,
+      to: r.end,
+      slice,
+      dropPos: r.start,
+      indicatorTopPx: hoverBlock.topPx,
+    };
+
+    const onMove = (ev: PointerEvent) => {
+      if (!dragRef.current?.active) return;
+      const drop = computeDropPosFromClientY(ev.clientY);
+      if (!drop) return;
+      dragRef.current.dropPos = drop.insertPos;
+      dragRef.current.indicatorTopPx = drop.indicatorTopPx;
+      // 상태 업데이트(렌더링용)
+      setHoverBlock((hb) => (hb ? { ...hb } : hb));
+    };
+
+    const onUp = () => {
+      const drag = dragRef.current;
+      dragRef.current = null;
+      window.removeEventListener("pointermove", onMove, true);
+      window.removeEventListener("pointerup", onUp, true);
+      if (!drag || !editor) return;
+      const { state, dispatch } = editor.view;
+      const { doc } = state;
+      // 현재 doc 기준으로 from/to가 유효한지 방어
+      const from = Math.max(0, Math.min(doc.content.size, drag.from));
+      const to = Math.max(from, Math.min(doc.content.size, drag.to));
+      let dropPos = Math.max(0, Math.min(doc.content.size, drag.dropPos));
+      if (dropPos >= from && dropPos <= to) return; // 같은 영역에 드랍
+
+      const tr = state.tr;
+      const slice = doc.slice(from, to);
+      tr.delete(from, to);
+      const deletedSize = to - from;
+      if (dropPos > from) dropPos = Math.max(0, dropPos - deletedSize);
+      tr.insert(dropPos, slice.content);
+      dispatch(tr.scrollIntoView());
+      setHoverBlock(null);
+    };
+
+    window.addEventListener("pointermove", onMove, true);
+    window.addEventListener("pointerup", onUp, true);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -693,6 +859,21 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
       <div className="memoEditorBody">
         <div className="richEditorWrap">
           <div className="richEditorShell">
+            {/* 좌측 블록 드래그 핸들 */}
+            <button
+              type="button"
+              className={`blockDragHandle${hoverBlock?.show ? " visible" : ""}`}
+              style={{ top: hoverBlock ? hoverBlock.topPx + 6 : 0 }}
+              onMouseDown={startBlockDrag}
+              aria-label="블록 이동"
+              title="블록 이동"
+            >
+              ⋮⋮
+            </button>
+            {/* 드롭 인디케이터 */}
+            {dragRef.current?.active ? (
+              <div className="blockDropIndicator" style={{ top: dragRef.current.indicatorTopPx }} />
+            ) : null}
             <div className="richEditorScroll" ref={editorScrollRef}>
               {editor ? <EditorContent editor={editor} /> : null}
             </div>
