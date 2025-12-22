@@ -179,29 +179,40 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
           const from = selection.from;
           const to = selection.to;
 
-          const $from = doc.resolve(from);
-          // listItem depth 찾기
-          let liDepth = -1;
-          for (let d = $from.depth; d > 0; d--) {
-            const name = $from.node(d).type.name;
-            if (name === "listItem" || name === "list_item") {
-              liDepth = d;
-              break;
+          const findListContext = ($pos: any) => {
+            // listItem depth 찾기
+            let liDepth = -1;
+            for (let d = $pos.depth; d > 0; d--) {
+              const name = $pos.node(d).type.name;
+              if (name === "listItem" || name === "list_item") {
+                liDepth = d;
+                break;
+              }
             }
-          }
-          if (liDepth < 1) return false;
+            if (liDepth < 1) return null;
+            const listDepth = liDepth - 1;
+            const listNode = $pos.node(listDepth);
+            const listName = listNode.type.name;
+            const isList =
+              listName === "bulletList" ||
+              listName === "orderedList" ||
+              listName === "bullet_list" ||
+              listName === "ordered_list";
+            if (!isList) return null;
+            const listPos = $pos.before(listDepth); // document position before list node
+            const listStart = listPos + 1; // start of list content
+            const listEnd = listPos + listNode.nodeSize - 1; // end of list content
+            return { liDepth, listDepth, listNode, listPos, listStart, listEnd };
+          };
 
-          const listDepth = liDepth - 1;
-          const listNode = $from.node(listDepth);
-          const listName = listNode.type.name;
-          if (listName !== "bulletList" && listName !== "orderedList" && listName !== "bullet_list" && listName !== "ordered_list") {
-            return false;
-          }
-
-          // selection이 동일 list 범위 밖으로 나가면 안전하게 포기
-          const listStart = $from.start(listDepth);
-          const listEnd = $from.end(listDepth);
-          if (to > listEnd || from < listStart) return false;
+          const $from = doc.resolve(from);
+          const $to = doc.resolve(to);
+          const ctxFrom = findListContext($from);
+          const ctxTo = findListContext($to);
+          if (!ctxFrom || !ctxTo) return false;
+          // selection이 같은 리스트 안에서만 "항목 이동"으로 처리
+          if (ctxFrom.listPos !== ctxTo.listPos) return false;
+          const { listNode, listStart, listEnd } = ctxFrom;
 
           // list children(listItem) 중 selection과 겹치는 아이템 범위 계산
           let pos = listStart;
@@ -210,7 +221,10 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
             const child = listNode.child(i);
             const start = pos;
             const end = pos + child.nodeSize;
-            if (end >= from && start <= to) hits.push({ idx: i, start, end });
+            // selection이 list 밖으로 약간 튀는 경우가 있어 list content 범위로 clamp
+            const f = Math.max(listStart, Math.min(listEnd, from));
+            const t = Math.max(listStart, Math.min(listEnd, to));
+            if (end >= f && start <= t) hits.push({ idx: i, start, end });
             pos = end;
           }
           if (!hits.length) return false;
