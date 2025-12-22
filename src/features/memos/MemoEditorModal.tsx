@@ -251,39 +251,43 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
     if (!editor) return;
     const scroller = editorScrollRef.current;
     if (!scroller) return;
-    const root = editor.view.dom as HTMLElement;
     const scrollRect = scroller.getBoundingClientRect();
-    const hs = root.querySelectorAll("h1, h2, h3");
     const next: HeadingMarker[] = [];
-    hs.forEach((node, idx) => {
-      const el = node as HTMLElement;
-      const tag = el.tagName.toLowerCase();
-      const level = tag === "h1" ? 1 : tag === "h2" ? 2 : 3;
-      const text = (el.textContent ?? "").trim();
-      if (!text.length) return;
-      const r = el.getBoundingClientRect();
-      const domTop = r.top - scrollRect.top + scroller.scrollTop; // scroller content 기준
-      const denom = Math.max(1, scroller.scrollHeight);
-      const topPct = Math.min(1, Math.max(0, domTop / denom));
-      let pos: number | null = null;
+    const denom = Math.max(1, scroller.scrollHeight);
+
+    // DOM query 대신 ProseMirror doc 기반으로 안정적으로 헤더 목록/pos를 생성
+    // (HMR/레이아웃 타이밍/중복 텍스트에 영향 없음)
+    editor.state.doc.descendants((node, pos) => {
+      if (node.type.name !== "heading") return true;
+      const level = (node.attrs?.level as 1 | 2 | 3 | undefined) ?? 1;
+      if (level < 1 || level > 3) return true;
+      const text = (node.textContent ?? "").trim();
+      if (!text.length) return true;
+      // heading 노드의 시작 위치로 커서를 둘 수 있도록 +1
+      const anchorPos = pos + 1;
+      let domTop = 0;
       try {
-        pos = editor.view.posAtDOM(el, 0);
+        const coords = editor.view.coordsAtPos(anchorPos);
+        domTop = coords.top - scrollRect.top + scroller.scrollTop;
       } catch {
-        pos = null;
+        domTop = 0;
       }
+      const topPct = Math.min(1, Math.max(0, domTop / denom));
       next.push({
-        key: `${tag}:${idx}:${text.slice(0, 24)}`,
+        key: `h:${anchorPos}:${level}`,
         level,
         text,
         topPct,
         domTop,
-        pos,
+        pos: anchorPos,
       });
+      return true;
     });
+
     setHeadingMarkers(next);
 
     // 현재 보고 있는 섹션(스크롤 위치 기준) 계산
-    const anchor = scroller.scrollTop + 40;
+    const anchor = scroller.scrollTop + 80;
     let active: string | null = null;
     for (const h of next) {
       if (h.domTop <= anchor) active = h.key;
@@ -395,8 +399,12 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
 
     const onSelectionForMenu = () => updateSelectionMenu();
     editor.on("selectionUpdate", onSelectionForMenu);
-    const onBlur = () => setSelMenu((s) => (s.open ? { ...s, open: false } : s));
-    editor.on("blur", onBlur);
+    // mouseup/keyup에서도 강제 갱신(선택 드래그 종료 시점 보장)
+    const dom = editor.view.dom as HTMLElement;
+    const onMouseUp = () => window.setTimeout(updateSelectionMenu, 0);
+    const onKeyUp = () => window.setTimeout(updateSelectionMenu, 0);
+    dom.addEventListener("mouseup", onMouseUp);
+    dom.addEventListener("keyup", onKeyUp);
 
     // 스크롤 위치 저장 + 헤더 레일 갱신
     const scroller = editorScrollRef.current;
@@ -406,6 +414,18 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
       updateSelectionMenu();
     };
     scroller?.addEventListener("scroll", onScroll, { passive: true });
+
+    // 툴바가 열린 상태에서 바깥 클릭하면 닫기(에디터 blur로 바로 닫히는 문제 방지)
+    const onDocMouseDown = (e: MouseEvent) => {
+      const t = e.target as Node | null;
+      if (!t) return;
+      const menuEl = selMenuRef.current;
+      const inMenu = menuEl ? menuEl.contains(t) : false;
+      const inEditor = dom.contains(t);
+      if (inMenu || inEditor) return;
+      setSelMenu((s) => (s.open ? { ...s, open: false } : s));
+    };
+    window.addEventListener("mousedown", onDocMouseDown);
 
     // 초기 복원(메모 id가 준비된 뒤 수행)
     const tryRestore = () => {
@@ -450,8 +470,10 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
       window.clearTimeout(t2);
       editor.off("selectionUpdate", onSelection);
       editor.off("selectionUpdate", onSelectionForMenu);
-      editor.off("blur", onBlur);
       scroller?.removeEventListener("scroll", onScroll as EventListener);
+      dom.removeEventListener("mouseup", onMouseUp);
+      dom.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("mousedown", onDocMouseDown);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editor, draftMemoId, mode?.kind]);
