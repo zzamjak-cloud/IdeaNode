@@ -736,8 +736,6 @@ body {
   overflow: auto;
   /* 우측 레일 공간 확보(스크롤바/오버레이와 클릭 영역 분리) */
   padding-right: 18px;
-  /* 좌측 드래그 핸들 공간(텍스트와 거리 과도하지 않게 최소화) */
-  padding-left: 20px;
 }
 
 /* 스크롤바 표시는 숨김(스크롤은 유지) */
@@ -840,54 +838,7 @@ body {
   border-color: rgba(34, 211, 238, 0.45);
 }
 
-/* 노션 스타일 블록 드래그 핸들 */
-.blockDragHandle {
-  position: absolute;
-  left: 2px;
-  width: 22px;
-  height: 26px;
-  border-radius: 8px;
-  border: none;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.7);
-  cursor: grab;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 120ms ease, background 120ms ease;
-  z-index: 20;
-  font-size: 14px;
-  line-height: 1;
-  transform: translateY(-50%); /* 라인 중앙 정렬 */
-}
-
-.blockDragHandle.visible {
-  opacity: 0.75;
-  pointer-events: auto;
-}
-
-.blockDragHandle:hover {
-  background: rgba(255, 255, 255, 0.06);
-  opacity: 1;
-}
-
-.blockDragHandle:active {
-  cursor: grabbing;
-}
-
-.blockDropIndicator {
-  position: absolute;
-  left: 20px;
-  right: 18px;
-  height: 2px;
-  border-radius: 999px;
-  background: rgba(34, 211, 238, 0.75);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
-  z-index: 19;
-  pointer-events: none;
-}
+/* (removed) notion-like block drag handle */
 
 /* 선택 텍스트 툴바 */
 .selectionToolbar {

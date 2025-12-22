@@ -7,7 +7,6 @@ import Color from "@tiptap/extension-color";
 import Highlight from "@tiptap/extension-highlight";
 import { Extension } from "@tiptap/core";
 import { Selection } from "@tiptap/pm/state";
-import type { Node as PMNode } from "@tiptap/pm/model";
 import { Save, X } from "lucide-react";
 import { Modal } from "../../components/Modal";
 import { ColorPicker, TEXT_COLOR_PRESETS } from "../../components/ColorPicker";
@@ -110,27 +109,11 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
   const selMenuRef = useRef<HTMLDivElement | null>(null);
   const lastSelectionRef = useRef<{ from: number; to: number } | null>(null);
 
-  const [hoverBlock, setHoverBlock] = useState<{
-    show: boolean;
-    topPx: number; // within richEditorShell
-    pos: number; // prosemirror pos (for range calc)
-  } | null>(null);
-  const hoverHideTimerRef = useRef<number | null>(null);
-  const handleHoveringRef = useRef(false);
-  const dragRef = useRef<{
-    active: boolean;
-    from: number;
-    to: number;
-    slice: any; // Slice
-    dropPos: number;
-    indicatorTopPx: number;
-  } | null>(null);
-
-  const MoveBlockShortcuts = useMemo(() => {
+  const MoveLineShortcuts = useMemo(() => {
     return Extension.create({
-      name: "ideanodeMoveBlocks",
+      name: "ideanodeMoveLines",
       addKeyboardShortcuts() {
-        const move = (dir: "up" | "down") => {
+        const moveTopLevelBlocks = (dir: "up" | "down") => {
           const { state, dispatch } = this.editor.view;
           const { doc, selection } = state;
           const from = selection.from;
@@ -190,6 +173,87 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
           return true;
         };
 
+        const moveLinesWithinTextblock = (dir: "up" | "down") => {
+          const { state, dispatch } = this.editor.view;
+          const { doc, selection } = state;
+          const from = selection.from;
+          const to = selection.to;
+          const $from = doc.resolve(from);
+          // 현재 커서가 있는 textblock depth 찾기
+          let depth = $from.depth;
+          while (depth > 0 && !$from.node(depth).isTextblock) depth--;
+          if (depth <= 0) return false;
+
+          const tb = $from.node(depth);
+          const tbStart = $from.start(depth);
+
+          // hard_break로 라인 분리
+          const breaks: { start: number; end: number }[] = [];
+          tb.descendants((node, pos) => {
+            if (node.type.name === "hardBreak" || node.type.name === "hard_break") {
+              breaks.push({ start: pos, end: pos + node.nodeSize });
+            }
+            return true;
+          });
+          breaks.sort((a, b) => a.start - b.start);
+
+          // 라인 목록 생성(브레이크 제외, 컨텐츠만)
+          const lines: { from: number; to: number }[] = [];
+          let cur = 0;
+          for (const b of breaks) {
+            lines.push({ from: cur, to: b.start });
+            cur = b.end;
+          }
+          lines.push({ from: cur, to: tb.content.size });
+          if (lines.length <= 1) return false;
+
+          const fromOff = Math.max(0, Math.min(tb.content.size, from - tbStart));
+          const toOff = Math.max(0, Math.min(tb.content.size, to - tbStart));
+          let startLine = 0;
+          let endLine = 0;
+          for (let i = 0; i < lines.length; i++) {
+            const L = lines[i];
+            if (fromOff >= L.from && fromOff <= L.to) startLine = i;
+            if (toOff >= L.from && toOff <= L.to) endLine = i;
+          }
+
+          if (dir === "up" && startLine === 0) return true;
+          if (dir === "down" && endLine === lines.length - 1) return true;
+
+          const neighborLine = dir === "up" ? startLine - 1 : endLine + 1;
+          const group = { from: lines[startLine].from, to: lines[endLine].to };
+          const neigh = lines[neighborLine];
+
+          // 두 구간이 붙어있고 사이에 hard_break가 있는 형태가 일반적이지만,
+          // 여기서는 "컨텐츠만" swap 한다. (hard_break는 그대로 유지)
+          const firstIsNeighbor = neigh.from < group.from;
+          const range1 = firstIsNeighbor ? { from: tbStart + neigh.from, to: tbStart + neigh.to } : { from: tbStart + group.from, to: tbStart + group.to };
+          const range2 = firstIsNeighbor ? { from: tbStart + group.from, to: tbStart + group.to } : { from: tbStart + neigh.from, to: tbStart + neigh.to };
+
+          const slice1 = doc.slice(range1.from, range1.to);
+          const slice2 = doc.slice(range2.from, range2.to);
+
+          const tr = state.tr;
+          // 뒤쪽 먼저 교체 -> 앞쪽 위치 유지
+          tr.replaceRange(range2.from, range2.to, slice1);
+          tr.replaceRange(range1.from, range1.to, slice2);
+
+          // 선택 영역을 이동 후에도 유지(대략적인 anchor)
+          const anchor = Math.max(tbStart + 1, Math.min(tr.doc.content.size, dir === "up" ? tbStart + lines[startLine - 1].from + 1 : tbStart + lines[startLine + 1].from + 1));
+          try {
+            tr.setSelection(Selection.near(tr.doc.resolve(anchor)));
+          } catch {}
+          dispatch(tr.scrollIntoView());
+          return true;
+        };
+
+        const move = (dir: "up" | "down") => {
+          // 1) 가능하면 같은 textblock 안에서 hard_break 기준으로 라인 이동
+          if (moveLinesWithinTextblock(dir)) return true;
+          // 2) 아니면 top-level block 이동(문단 단위)
+          return moveTopLevelBlocks(dir);
+        };
+
         return {
           // 충돌 가능성이 낮은 조합으로 고정: Ctrl+Shift+Alt+↑/↓
           // (Alt/Option 단독은 OS/에디터 기본 이동과 충돌하는 환경이 있어 배제)
@@ -221,7 +285,7 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
       TextStyle,
       Color,
       Highlight.configure({ multicolor: true }),
-      MoveBlockShortcuts,
+      MoveLineShortcuts,
       Placeholder.configure({
         placeholder: "여기에 메모를 작성하세요…",
       }),
@@ -236,174 +300,6 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
       setContent(editor.getHTML());
     },
   });
-
-  const getTopLevelBlockRange = (doc: PMNode, pos: number) => {
-    const $pos = doc.resolve(Math.max(0, Math.min(doc.content.size, pos)));
-    const idx = $pos.index(0);
-    let start = 0;
-    for (let i = 0; i < idx; i++) start += doc.child(i).nodeSize;
-    const node = doc.child(idx);
-    const end = start + node.nodeSize;
-    return { idx, start, end };
-  };
-
-  const computeDropPosFromClientY = (clientY: number) => {
-    if (!editor) return null;
-    const scroller = editorScrollRef.current;
-    if (!scroller) return null;
-    const rect = scroller.getBoundingClientRect();
-    const coords = editor.view.posAtCoords({ left: rect.left + 40, top: clientY });
-    if (!coords) return null;
-    const { doc } = editor.state;
-    const r = getTopLevelBlockRange(doc, coords.pos);
-    // 위/아래 절반으로 before/after 결정
-    let insertPos = r.start;
-    try {
-      // target block의 화면 위치로 half 판정
-      const dom = editor.view.nodeDOM(r.start) as HTMLElement | null;
-      if (dom) {
-        const br = dom.getBoundingClientRect();
-        const mid = br.top + br.height / 2;
-        insertPos = clientY < mid ? r.start : r.end;
-      } else {
-        insertPos = r.start;
-      }
-    } catch {
-      insertPos = r.start;
-    }
-    const indicatorTopPx = (() => {
-      // scroller content 기준 y 계산
-      const y = clientY - rect.top + scroller.scrollTop;
-      return Math.max(0, Math.min(scroller.scrollHeight, y));
-    })();
-    return { insertPos, indicatorTopPx };
-  };
-
-  // 블록 호버 감지 + 드래그 핸들 위치 계산
-  useEffect(() => {
-    if (!open) return;
-    if (!editor) return;
-    const scroller = editorScrollRef.current;
-    if (!scroller) return;
-
-    // 중요: 거터(핸들 영역)로 마우스를 옮겨도 핸들이 사라지지 않게
-    // "현재 Y좌표"만으로 가장 가까운 블록을 찾는다.
-    const clearHideTimer = () => {
-      if (hoverHideTimerRef.current) window.clearTimeout(hoverHideTimerRef.current);
-      hoverHideTimerRef.current = null;
-    };
-
-    const scheduleHide = () => {
-      clearHideTimer();
-      hoverHideTimerRef.current = window.setTimeout(() => {
-        hoverHideTimerRef.current = null;
-        if (handleHoveringRef.current) return;
-        setHoverBlock(null);
-      }, 220);
-    };
-
-    const pickBlockFromY = (clientY: number) => {
-      const rect = scroller.getBoundingClientRect();
-      if (clientY < rect.top || clientY > rect.bottom) return null;
-      const coords = editor.view.posAtCoords({ left: rect.left + 40, top: clientY });
-      if (!coords) return null;
-      const { doc } = editor.state;
-      const r = getTopLevelBlockRange(doc, coords.pos);
-      // 블록의 시작 위치 기준으로 핸들 y를 계산
-      let centerPx = 0;
-      try {
-        // coordsAtPos는 폰트 크기/라인박스를 완전히 반영 못하는 경우가 있어
-        // 실제 렌더링된 top-level 블록 DOM의 rect로 중심을 계산한다(헤더/본문 크기 차이 정확히 반영).
-        const root = editor.view.dom as HTMLElement;
-        const child = (root.children?.[r.idx] as HTMLElement | undefined) ?? undefined;
-        if (child) {
-          const br = child.getBoundingClientRect();
-          const centerY = (br.top + br.bottom) / 2;
-          centerPx = centerY - rect.top + scroller.scrollTop;
-        } else {
-          const startPos = Math.min(doc.content.size, r.start + 1);
-          const startCoords = editor.view.coordsAtPos(startPos);
-          centerPx = startCoords.top - rect.top + scroller.scrollTop;
-        }
-      } catch {
-        centerPx = clientY - rect.top + scroller.scrollTop;
-      }
-      return { pos: r.start + 1, centerPx };
-    };
-
-    const onMove = (e: PointerEvent) => {
-      if (dragRef.current?.active) return;
-      const picked = pickBlockFromY(e.clientY);
-      if (!picked) {
-        // 핸들로 이동하는 순간/라인 경계에서 잠깐 벗어나도 바로 숨기지 않음
-        if (!handleHoveringRef.current) scheduleHide();
-        return;
-      }
-      clearHideTimer();
-      setHoverBlock({ show: true, topPx: picked.centerPx, pos: picked.pos });
-    };
-
-    window.addEventListener("pointermove", onMove, true);
-    return () => {
-      window.removeEventListener("pointermove", onMove, true);
-      clearHideTimer();
-    };
-  }, [open, editor]);
-
-  const startBlockDrag = (e: React.MouseEvent) => {
-    if (!editor) return;
-    if (!hoverBlock) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const { doc } = editor.state;
-    const r = getTopLevelBlockRange(doc, hoverBlock.pos);
-    const slice = doc.slice(r.start, r.end);
-    dragRef.current = {
-      active: true,
-      from: r.start,
-      to: r.end,
-      slice,
-      dropPos: r.start,
-      indicatorTopPx: hoverBlock.topPx,
-    };
-
-    const onMove = (ev: PointerEvent) => {
-      if (!dragRef.current?.active) return;
-      const drop = computeDropPosFromClientY(ev.clientY);
-      if (!drop) return;
-      dragRef.current.dropPos = drop.insertPos;
-      dragRef.current.indicatorTopPx = drop.indicatorTopPx;
-      // 상태 업데이트(렌더링용)
-      setHoverBlock((hb) => (hb ? { ...hb } : hb));
-    };
-
-    const onUp = () => {
-      const drag = dragRef.current;
-      dragRef.current = null;
-      window.removeEventListener("pointermove", onMove, true);
-      window.removeEventListener("pointerup", onUp, true);
-      if (!drag || !editor) return;
-      const { state, dispatch } = editor.view;
-      const { doc } = state;
-      // 현재 doc 기준으로 from/to가 유효한지 방어
-      const from = Math.max(0, Math.min(doc.content.size, drag.from));
-      const to = Math.max(from, Math.min(doc.content.size, drag.to));
-      let dropPos = Math.max(0, Math.min(doc.content.size, drag.dropPos));
-      if (dropPos >= from && dropPos <= to) return; // 같은 영역에 드랍
-
-      const tr = state.tr;
-      const slice = doc.slice(from, to);
-      tr.delete(from, to);
-      const deletedSize = to - from;
-      if (dropPos > from) dropPos = Math.max(0, dropPos - deletedSize);
-      tr.insert(dropPos, slice.content);
-      dispatch(tr.scrollIntoView());
-      setHoverBlock(null);
-    };
-
-    window.addEventListener("pointermove", onMove, true);
-    window.addEventListener("pointerup", onUp, true);
-  };
 
   useEffect(() => {
     if (!open) return;
@@ -878,35 +774,6 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
       <div className="memoEditorBody">
         <div className="richEditorWrap">
           <div className="richEditorShell">
-            {/* 좌측 블록 드래그 핸들 */}
-            <button
-              type="button"
-              className={`blockDragHandle${hoverBlock?.show ? " visible" : ""}`}
-              style={{ top: hoverBlock ? hoverBlock.topPx : 0 }}
-              onMouseDown={startBlockDrag}
-              onMouseEnter={() => {
-                handleHoveringRef.current = true;
-                if (hoverHideTimerRef.current) window.clearTimeout(hoverHideTimerRef.current);
-                hoverHideTimerRef.current = null;
-              }}
-              onMouseLeave={() => {
-                handleHoveringRef.current = false;
-                // 핸들에서 빠져도 즉시 숨기지 않음
-                if (hoverHideTimerRef.current) window.clearTimeout(hoverHideTimerRef.current);
-                hoverHideTimerRef.current = window.setTimeout(() => {
-                  hoverHideTimerRef.current = null;
-                  if (!handleHoveringRef.current) setHoverBlock(null);
-                }, 220);
-              }}
-              aria-label="블록 이동"
-              title="블록 이동"
-            >
-              ⋮⋮
-            </button>
-            {/* 드롭 인디케이터 */}
-            {dragRef.current?.active ? (
-              <div className="blockDropIndicator" style={{ top: dragRef.current.indicatorTopPx }} />
-            ) : null}
             <div className="richEditorScroll" ref={editorScrollRef}>
               {editor ? <EditorContent editor={editor} /> : null}
             </div>
