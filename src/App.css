@@ -563,8 +563,7 @@ body {
 }
 
 .emojiPickerPanel {
-  max-height: 300px;
-  overflow: auto;
+  /* 이중 스크롤 방지: 팝업 컨테이너가 높이 제한을 담당 */
 }
 
 .popoverPortal {

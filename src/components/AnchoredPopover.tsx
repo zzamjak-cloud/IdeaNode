@@ -9,6 +9,7 @@ type Props = {
   maxHeight?: number;
   offset?: number;
   placement?: "bottom-start" | "bottom-end";
+  disableScroll?: boolean;
   onClose?: () => void;
 };
 
@@ -22,6 +23,7 @@ export function AnchoredPopover({
   maxHeight = 520,
   offset = 8,
   placement = "bottom-start",
+  disableScroll = false,
   onClose,
 }: Props) {
   const [pos, setPos] = useState<Pos>({ left: 0, top: 0 });
@@ -35,10 +37,10 @@ export function AnchoredPopover({
         top: pos.top,
         width: effective.width,
         maxHeight: effective.maxHeight,
-        overflow: "auto",
+        overflow: disableScroll ? "visible" : "auto",
         zIndex: 1000,
       }) as const,
-    [pos.left, pos.top, effective.width, effective.maxHeight],
+    [pos.left, pos.top, effective.width, effective.maxHeight, disableScroll],
   );
 
   const compute = () => {

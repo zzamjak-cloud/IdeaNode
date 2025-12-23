@@ -539,12 +539,13 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
 
     setHeadingMarkers(next);
 
-    // 현재 보고 있는 섹션(스크롤 위치 기준) 계산
-    const anchor = scroller.scrollTop + 80;
+    // 현재 커서 위치를 포함하는 섹션 계산 (커서 위치 기준)
+    const cursorPos = editor.state.selection.from;
     let active: string | null = null;
     for (const h of next) {
-      if (h.domTop <= anchor) active = h.key;
-      else break;
+      if (h.pos !== null && h.pos <= cursorPos) {
+        active = h.key;
+      }
     }
     setActiveHeadingKey(active);
   };
@@ -625,8 +626,11 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
     if (!open) return;
     if (!editor) return;
 
-    // selection 변화에 따라 커서 위치 저장
-    const onSelection = () => schedulePersistLastPos();
+    // selection 변화에 따라 커서 위치 저장 및 헤더 레일 활성화 업데이트
+    const onSelection = () => {
+      schedulePersistLastPos();
+      scheduleRecomputeHeadingRail();
+    };
     editor.on("selectionUpdate", onSelection);
 
     const updateSelectionMenu = () => {
@@ -1001,6 +1005,7 @@ export function MemoEditorModal({ open, mode, onClose, onCreatedOrUpdated }: Pro
       anchorRef={emojiBtnRef}
       width={420}
       maxHeight={560}
+      disableScroll={true}
       onClose={() => setEmojiOpen(false)}
     >
       <div className="popoverInner">

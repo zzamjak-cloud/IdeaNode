@@ -324,6 +324,7 @@ export default function MemoWindow() {
         anchorRef={emojiBtnRef}
         width={420}
         maxHeight={560}
+        disableScroll={true}
         onClose={() => setEmojiOpen(false)}
       >
         <div className="popoverInner">
