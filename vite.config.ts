@@ -29,4 +29,41 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+  // Build optimization: Split large dependencies into separate chunks
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: (id) => {
+          // React core libraries
+          if (id.includes("node_modules/react/") || id.includes("node_modules/react-dom/")) {
+            return "react-vendor";
+          }
+          // TipTap editor and extensions
+          if (id.includes("node_modules/@tiptap/")) {
+            return "tiptap";
+          }
+          // Markdown editor
+          if (id.includes("node_modules/@uiw/react-md-editor/")) {
+            return "md-editor";
+          }
+          // Emoji picker
+          if (id.includes("node_modules/emoji-picker-react/")) {
+            return "emoji-picker";
+          }
+          // Drag and drop
+          if (id.includes("node_modules/@dnd-kit/")) {
+            return "dnd-kit";
+          }
+          // Icons
+          if (id.includes("node_modules/lucide-react/")) {
+            return "lucide-icons";
+          }
+          // State management
+          if (id.includes("node_modules/zustand/")) {
+            return "zustand";
+          }
+        },
+      },
+    },
+  },
 }));
